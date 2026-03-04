@@ -345,6 +345,7 @@ Types:
 
 ```python
 from openai.types.graders import (
+    GraderInputs,
     LabelModelGrader,
     MultiGrader,
     PythonGrader,
@@ -421,30 +422,7 @@ Methods:
 - <code>client.vector_stores.file_batches.<a href="./src/openai/resources/vector_stores/file_batches.py">poll</a>(\*args) -> VectorStoreFileBatch</code>
 - <code>client.vector_stores.file_batches.<a href="./src/openai/resources/vector_stores/file_batches.py">upload_and_poll</a>(\*args) -> VectorStoreFileBatch</code>
 
-# Webhooks
-
-Types:
-
-```python
-from openai.types.webhooks import (
-    BatchCancelledWebhookEvent,
-    BatchCompletedWebhookEvent,
-    BatchExpiredWebhookEvent,
-    BatchFailedWebhookEvent,
-    EvalRunCanceledWebhookEvent,
-    EvalRunFailedWebhookEvent,
-    EvalRunSucceededWebhookEvent,
-    FineTuningJobCancelledWebhookEvent,
-    FineTuningJobFailedWebhookEvent,
-    FineTuningJobSucceededWebhookEvent,
-    RealtimeCallIncomingWebhookEvent,
-    ResponseCancelledWebhookEvent,
-    ResponseCompletedWebhookEvent,
-    ResponseFailedWebhookEvent,
-    ResponseIncompleteWebhookEvent,
-    UnwrapWebhookEvent,
-)
-```
+# [Webhooks](src/openai/resources/webhooks/api.md)
 
 Methods:
 
@@ -729,345 +707,11 @@ Methods:
 
 - <code title="post /uploads/{upload_id}/parts">client.uploads.parts.<a href="./src/openai/resources/uploads/parts.py">create</a>(upload_id, \*\*<a href="src/openai/types/uploads/part_create_params.py">params</a>) -> <a href="./src/openai/types/uploads/upload_part.py">UploadPart</a></code>
 
-# Responses
+# [Responses](src/openai/resources/responses/api.md)
 
-Types:
+# [Realtime](src/openai/resources/realtime/api.md)
 
-```python
-from openai.types.responses import (
-    ApplyPatchTool,
-    ComputerTool,
-    CustomTool,
-    EasyInputMessage,
-    FileSearchTool,
-    FunctionShellTool,
-    FunctionTool,
-    Response,
-    ResponseApplyPatchToolCall,
-    ResponseApplyPatchToolCallOutput,
-    ResponseAudioDeltaEvent,
-    ResponseAudioDoneEvent,
-    ResponseAudioTranscriptDeltaEvent,
-    ResponseAudioTranscriptDoneEvent,
-    ResponseCodeInterpreterCallCodeDeltaEvent,
-    ResponseCodeInterpreterCallCodeDoneEvent,
-    ResponseCodeInterpreterCallCompletedEvent,
-    ResponseCodeInterpreterCallInProgressEvent,
-    ResponseCodeInterpreterCallInterpretingEvent,
-    ResponseCodeInterpreterToolCall,
-    ResponseCompletedEvent,
-    ResponseComputerToolCall,
-    ResponseComputerToolCallOutputItem,
-    ResponseComputerToolCallOutputScreenshot,
-    ResponseContent,
-    ResponseContentPartAddedEvent,
-    ResponseContentPartDoneEvent,
-    ResponseConversationParam,
-    ResponseCreatedEvent,
-    ResponseCustomToolCall,
-    ResponseCustomToolCallInputDeltaEvent,
-    ResponseCustomToolCallInputDoneEvent,
-    ResponseCustomToolCallOutput,
-    ResponseError,
-    ResponseErrorEvent,
-    ResponseFailedEvent,
-    ResponseFileSearchCallCompletedEvent,
-    ResponseFileSearchCallInProgressEvent,
-    ResponseFileSearchCallSearchingEvent,
-    ResponseFileSearchToolCall,
-    ResponseFormatTextConfig,
-    ResponseFormatTextJSONSchemaConfig,
-    ResponseFunctionCallArgumentsDeltaEvent,
-    ResponseFunctionCallArgumentsDoneEvent,
-    ResponseFunctionCallOutputItem,
-    ResponseFunctionCallOutputItemList,
-    ResponseFunctionShellCallOutputContent,
-    ResponseFunctionShellToolCall,
-    ResponseFunctionShellToolCallOutput,
-    ResponseFunctionToolCall,
-    ResponseFunctionToolCallItem,
-    ResponseFunctionToolCallOutputItem,
-    ResponseFunctionWebSearch,
-    ResponseImageGenCallCompletedEvent,
-    ResponseImageGenCallGeneratingEvent,
-    ResponseImageGenCallInProgressEvent,
-    ResponseImageGenCallPartialImageEvent,
-    ResponseInProgressEvent,
-    ResponseIncludable,
-    ResponseIncompleteEvent,
-    ResponseInput,
-    ResponseInputAudio,
-    ResponseInputContent,
-    ResponseInputFile,
-    ResponseInputFileContent,
-    ResponseInputImage,
-    ResponseInputImageContent,
-    ResponseInputItem,
-    ResponseInputMessageContentList,
-    ResponseInputMessageItem,
-    ResponseInputText,
-    ResponseInputTextContent,
-    ResponseItem,
-    ResponseMcpCallArgumentsDeltaEvent,
-    ResponseMcpCallArgumentsDoneEvent,
-    ResponseMcpCallCompletedEvent,
-    ResponseMcpCallFailedEvent,
-    ResponseMcpCallInProgressEvent,
-    ResponseMcpListToolsCompletedEvent,
-    ResponseMcpListToolsFailedEvent,
-    ResponseMcpListToolsInProgressEvent,
-    ResponseOutputAudio,
-    ResponseOutputItem,
-    ResponseOutputItemAddedEvent,
-    ResponseOutputItemDoneEvent,
-    ResponseOutputMessage,
-    ResponseOutputRefusal,
-    ResponseOutputText,
-    ResponseOutputTextAnnotationAddedEvent,
-    ResponsePrompt,
-    ResponseQueuedEvent,
-    ResponseReasoningItem,
-    ResponseReasoningSummaryPartAddedEvent,
-    ResponseReasoningSummaryPartDoneEvent,
-    ResponseReasoningSummaryTextDeltaEvent,
-    ResponseReasoningSummaryTextDoneEvent,
-    ResponseReasoningTextDeltaEvent,
-    ResponseReasoningTextDoneEvent,
-    ResponseRefusalDeltaEvent,
-    ResponseRefusalDoneEvent,
-    ResponseStatus,
-    ResponseStreamEvent,
-    ResponseTextConfig,
-    ResponseTextDeltaEvent,
-    ResponseTextDoneEvent,
-    ResponseUsage,
-    ResponseWebSearchCallCompletedEvent,
-    ResponseWebSearchCallInProgressEvent,
-    ResponseWebSearchCallSearchingEvent,
-    Tool,
-    ToolChoiceAllowed,
-    ToolChoiceApplyPatch,
-    ToolChoiceCustom,
-    ToolChoiceFunction,
-    ToolChoiceMcp,
-    ToolChoiceOptions,
-    ToolChoiceShell,
-    ToolChoiceTypes,
-    WebSearchPreviewTool,
-    WebSearchTool,
-)
-```
-
-Methods:
-
-- <code title="post /responses">client.responses.<a href="./src/openai/resources/responses/responses.py">create</a>(\*\*<a href="src/openai/types/responses/response_create_params.py">params</a>) -> <a href="./src/openai/types/responses/response.py">Response</a></code>
-- <code title="get /responses/{response_id}">client.responses.<a href="./src/openai/resources/responses/responses.py">retrieve</a>(response_id, \*\*<a href="src/openai/types/responses/response_retrieve_params.py">params</a>) -> <a href="./src/openai/types/responses/response.py">Response</a></code>
-- <code title="delete /responses/{response_id}">client.responses.<a href="./src/openai/resources/responses/responses.py">delete</a>(response_id) -> None</code>
-- <code title="post /responses/{response_id}/cancel">client.responses.<a href="./src/openai/resources/responses/responses.py">cancel</a>(response_id) -> <a href="./src/openai/types/responses/response.py">Response</a></code>
-
-## InputItems
-
-Types:
-
-```python
-from openai.types.responses import ResponseItemList
-```
-
-Methods:
-
-- <code title="get /responses/{response_id}/input_items">client.responses.input_items.<a href="./src/openai/resources/responses/input_items.py">list</a>(response_id, \*\*<a href="src/openai/types/responses/input_item_list_params.py">params</a>) -> <a href="./src/openai/types/responses/response_item.py">SyncCursorPage[ResponseItem]</a></code>
-
-## InputTokens
-
-Types:
-
-```python
-from openai.types.responses import InputTokenCountResponse
-```
-
-Methods:
-
-- <code title="post /responses/input_tokens">client.responses.input_tokens.<a href="./src/openai/resources/responses/input_tokens.py">count</a>(\*\*<a href="src/openai/types/responses/input_token_count_params.py">params</a>) -> <a href="./src/openai/types/responses/input_token_count_response.py">InputTokenCountResponse</a></code>
-
-# Realtime
-
-Types:
-
-```python
-from openai.types.realtime import (
-    AudioTranscription,
-    ConversationCreatedEvent,
-    ConversationItem,
-    ConversationItemAdded,
-    ConversationItemCreateEvent,
-    ConversationItemCreatedEvent,
-    ConversationItemDeleteEvent,
-    ConversationItemDeletedEvent,
-    ConversationItemDone,
-    ConversationItemInputAudioTranscriptionCompletedEvent,
-    ConversationItemInputAudioTranscriptionDeltaEvent,
-    ConversationItemInputAudioTranscriptionFailedEvent,
-    ConversationItemInputAudioTranscriptionSegment,
-    ConversationItemRetrieveEvent,
-    ConversationItemTruncateEvent,
-    ConversationItemTruncatedEvent,
-    ConversationItemWithReference,
-    InputAudioBufferAppendEvent,
-    InputAudioBufferClearEvent,
-    InputAudioBufferClearedEvent,
-    InputAudioBufferCommitEvent,
-    InputAudioBufferCommittedEvent,
-    InputAudioBufferSpeechStartedEvent,
-    InputAudioBufferSpeechStoppedEvent,
-    InputAudioBufferTimeoutTriggered,
-    LogProbProperties,
-    McpListToolsCompleted,
-    McpListToolsFailed,
-    McpListToolsInProgress,
-    NoiseReductionType,
-    OutputAudioBufferClearEvent,
-    RateLimitsUpdatedEvent,
-    RealtimeAudioConfig,
-    RealtimeAudioConfigInput,
-    RealtimeAudioConfigOutput,
-    RealtimeAudioFormats,
-    RealtimeAudioInputTurnDetection,
-    RealtimeClientEvent,
-    RealtimeConversationItemAssistantMessage,
-    RealtimeConversationItemFunctionCall,
-    RealtimeConversationItemFunctionCallOutput,
-    RealtimeConversationItemSystemMessage,
-    RealtimeConversationItemUserMessage,
-    RealtimeError,
-    RealtimeErrorEvent,
-    RealtimeFunctionTool,
-    RealtimeMcpApprovalRequest,
-    RealtimeMcpApprovalResponse,
-    RealtimeMcpListTools,
-    RealtimeMcpProtocolError,
-    RealtimeMcpToolCall,
-    RealtimeMcpToolExecutionError,
-    RealtimeMcphttpError,
-    RealtimeResponse,
-    RealtimeResponseCreateAudioOutput,
-    RealtimeResponseCreateMcpTool,
-    RealtimeResponseCreateParams,
-    RealtimeResponseStatus,
-    RealtimeResponseUsage,
-    RealtimeResponseUsageInputTokenDetails,
-    RealtimeResponseUsageOutputTokenDetails,
-    RealtimeServerEvent,
-    RealtimeSession,
-    RealtimeSessionCreateRequest,
-    RealtimeToolChoiceConfig,
-    RealtimeToolsConfig,
-    RealtimeToolsConfigUnion,
-    RealtimeTracingConfig,
-    RealtimeTranscriptionSessionAudio,
-    RealtimeTranscriptionSessionAudioInput,
-    RealtimeTranscriptionSessionAudioInputTurnDetection,
-    RealtimeTranscriptionSessionCreateRequest,
-    RealtimeTruncation,
-    RealtimeTruncationRetentionRatio,
-    ResponseAudioDeltaEvent,
-    ResponseAudioDoneEvent,
-    ResponseAudioTranscriptDeltaEvent,
-    ResponseAudioTranscriptDoneEvent,
-    ResponseCancelEvent,
-    ResponseContentPartAddedEvent,
-    ResponseContentPartDoneEvent,
-    ResponseCreateEvent,
-    ResponseCreatedEvent,
-    ResponseDoneEvent,
-    ResponseFunctionCallArgumentsDeltaEvent,
-    ResponseFunctionCallArgumentsDoneEvent,
-    ResponseMcpCallArgumentsDelta,
-    ResponseMcpCallArgumentsDone,
-    ResponseMcpCallCompleted,
-    ResponseMcpCallFailed,
-    ResponseMcpCallInProgress,
-    ResponseOutputItemAddedEvent,
-    ResponseOutputItemDoneEvent,
-    ResponseTextDeltaEvent,
-    ResponseTextDoneEvent,
-    SessionCreatedEvent,
-    SessionUpdateEvent,
-    SessionUpdatedEvent,
-    TranscriptionSessionUpdate,
-    TranscriptionSessionUpdatedEvent,
-)
-```
-
-## ClientSecrets
-
-Types:
-
-```python
-from openai.types.realtime import (
-    RealtimeSessionClientSecret,
-    RealtimeSessionCreateResponse,
-    RealtimeTranscriptionSessionCreateResponse,
-    RealtimeTranscriptionSessionTurnDetection,
-    ClientSecretCreateResponse,
-)
-```
-
-Methods:
-
-- <code title="post /realtime/client_secrets">client.realtime.client_secrets.<a href="./src/openai/resources/realtime/client_secrets.py">create</a>(\*\*<a href="src/openai/types/realtime/client_secret_create_params.py">params</a>) -> <a href="./src/openai/types/realtime/client_secret_create_response.py">ClientSecretCreateResponse</a></code>
-
-## Calls
-
-Methods:
-
-- <code title="post /realtime/calls">client.realtime.calls.<a href="./src/openai/resources/realtime/calls.py">create</a>(\*\*<a href="src/openai/types/realtime/call_create_params.py">params</a>) -> HttpxBinaryResponseContent</code>
-- <code title="post /realtime/calls/{call_id}/accept">client.realtime.calls.<a href="./src/openai/resources/realtime/calls.py">accept</a>(call_id, \*\*<a href="src/openai/types/realtime/call_accept_params.py">params</a>) -> None</code>
-- <code title="post /realtime/calls/{call_id}/hangup">client.realtime.calls.<a href="./src/openai/resources/realtime/calls.py">hangup</a>(call_id) -> None</code>
-- <code title="post /realtime/calls/{call_id}/refer">client.realtime.calls.<a href="./src/openai/resources/realtime/calls.py">refer</a>(call_id, \*\*<a href="src/openai/types/realtime/call_refer_params.py">params</a>) -> None</code>
-- <code title="post /realtime/calls/{call_id}/reject">client.realtime.calls.<a href="./src/openai/resources/realtime/calls.py">reject</a>(call_id, \*\*<a href="src/openai/types/realtime/call_reject_params.py">params</a>) -> None</code>
-
-# Conversations
-
-Types:
-
-```python
-from openai.types.conversations import (
-    ComputerScreenshotContent,
-    Conversation,
-    ConversationDeleted,
-    ConversationDeletedResource,
-    Message,
-    SummaryTextContent,
-    TextContent,
-    InputTextContent,
-    OutputTextContent,
-    RefusalContent,
-    InputImageContent,
-    InputFileContent,
-)
-```
-
-Methods:
-
-- <code title="post /conversations">client.conversations.<a href="./src/openai/resources/conversations/conversations.py">create</a>(\*\*<a href="src/openai/types/conversations/conversation_create_params.py">params</a>) -> <a href="./src/openai/types/conversations/conversation.py">Conversation</a></code>
-- <code title="get /conversations/{conversation_id}">client.conversations.<a href="./src/openai/resources/conversations/conversations.py">retrieve</a>(conversation_id) -> <a href="./src/openai/types/conversations/conversation.py">Conversation</a></code>
-- <code title="post /conversations/{conversation_id}">client.conversations.<a href="./src/openai/resources/conversations/conversations.py">update</a>(conversation_id, \*\*<a href="src/openai/types/conversations/conversation_update_params.py">params</a>) -> <a href="./src/openai/types/conversations/conversation.py">Conversation</a></code>
-- <code title="delete /conversations/{conversation_id}">client.conversations.<a href="./src/openai/resources/conversations/conversations.py">delete</a>(conversation_id) -> <a href="./src/openai/types/conversations/conversation_deleted_resource.py">ConversationDeletedResource</a></code>
-
-## Items
-
-Types:
-
-```python
-from openai.types.conversations import ConversationItem, ConversationItemList
-```
-
-Methods:
-
-- <code title="post /conversations/{conversation_id}/items">client.conversations.items.<a href="./src/openai/resources/conversations/items.py">create</a>(conversation_id, \*\*<a href="src/openai/types/conversations/item_create_params.py">params</a>) -> <a href="./src/openai/types/conversations/conversation_item_list.py">ConversationItemList</a></code>
-- <code title="get /conversations/{conversation_id}/items/{item_id}">client.conversations.items.<a href="./src/openai/resources/conversations/items.py">retrieve</a>(item_id, \*, conversation_id, \*\*<a href="src/openai/types/conversations/item_retrieve_params.py">params</a>) -> <a href="./src/openai/types/conversations/conversation_item.py">ConversationItem</a></code>
-- <code title="get /conversations/{conversation_id}/items">client.conversations.items.<a href="./src/openai/resources/conversations/items.py">list</a>(conversation_id, \*\*<a href="src/openai/types/conversations/item_list_params.py">params</a>) -> <a href="./src/openai/types/conversations/conversation_item.py">SyncConversationCursorPage[ConversationItem]</a></code>
-- <code title="delete /conversations/{conversation_id}/items/{item_id}">client.conversations.items.<a href="./src/openai/resources/conversations/items.py">delete</a>(item_id, \*, conversation_id) -> <a href="./src/openai/types/conversations/conversation.py">Conversation</a></code>
+# [Conversations](src/openai/resources/conversations/api.md)
 
 # Evals
 
@@ -1166,6 +810,49 @@ Methods:
 Methods:
 
 - <code title="get /containers/{container_id}/files/{file_id}/content">client.containers.files.content.<a href="./src/openai/resources/containers/files/content.py">retrieve</a>(file_id, \*, container_id) -> HttpxBinaryResponseContent</code>
+
+# Skills
+
+Types:
+
+```python
+from openai.types import DeletedSkill, Skill, SkillList
+```
+
+Methods:
+
+- <code title="post /skills">client.skills.<a href="./src/openai/resources/skills/skills.py">create</a>(\*\*<a href="src/openai/types/skill_create_params.py">params</a>) -> <a href="./src/openai/types/skill.py">Skill</a></code>
+- <code title="get /skills/{skill_id}">client.skills.<a href="./src/openai/resources/skills/skills.py">retrieve</a>(skill_id) -> <a href="./src/openai/types/skill.py">Skill</a></code>
+- <code title="post /skills/{skill_id}">client.skills.<a href="./src/openai/resources/skills/skills.py">update</a>(skill_id, \*\*<a href="src/openai/types/skill_update_params.py">params</a>) -> <a href="./src/openai/types/skill.py">Skill</a></code>
+- <code title="get /skills">client.skills.<a href="./src/openai/resources/skills/skills.py">list</a>(\*\*<a href="src/openai/types/skill_list_params.py">params</a>) -> <a href="./src/openai/types/skill.py">SyncCursorPage[Skill]</a></code>
+- <code title="delete /skills/{skill_id}">client.skills.<a href="./src/openai/resources/skills/skills.py">delete</a>(skill_id) -> <a href="./src/openai/types/deleted_skill.py">DeletedSkill</a></code>
+
+## Content
+
+Methods:
+
+- <code title="get /skills/{skill_id}/content">client.skills.content.<a href="./src/openai/resources/skills/content.py">retrieve</a>(skill_id) -> HttpxBinaryResponseContent</code>
+
+## Versions
+
+Types:
+
+```python
+from openai.types.skills import DeletedSkillVersion, SkillVersion, SkillVersionList
+```
+
+Methods:
+
+- <code title="post /skills/{skill_id}/versions">client.skills.versions.<a href="./src/openai/resources/skills/versions/versions.py">create</a>(skill_id, \*\*<a href="src/openai/types/skills/version_create_params.py">params</a>) -> <a href="./src/openai/types/skills/skill_version.py">SkillVersion</a></code>
+- <code title="get /skills/{skill_id}/versions/{version}">client.skills.versions.<a href="./src/openai/resources/skills/versions/versions.py">retrieve</a>(version, \*, skill_id) -> <a href="./src/openai/types/skills/skill_version.py">SkillVersion</a></code>
+- <code title="get /skills/{skill_id}/versions">client.skills.versions.<a href="./src/openai/resources/skills/versions/versions.py">list</a>(skill_id, \*\*<a href="src/openai/types/skills/version_list_params.py">params</a>) -> <a href="./src/openai/types/skills/skill_version.py">SyncCursorPage[SkillVersion]</a></code>
+- <code title="delete /skills/{skill_id}/versions/{version}">client.skills.versions.<a href="./src/openai/resources/skills/versions/versions.py">delete</a>(version, \*, skill_id) -> <a href="./src/openai/types/skills/deleted_skill_version.py">DeletedSkillVersion</a></code>
+
+### Content
+
+Methods:
+
+- <code title="get /skills/{skill_id}/versions/{version}/content">client.skills.versions.content.<a href="./src/openai/resources/skills/versions/content.py">retrieve</a>(version, \*, skill_id) -> HttpxBinaryResponseContent</code>
 
 # Videos
 

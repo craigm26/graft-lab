@@ -23,7 +23,7 @@ The full typed surface area of the SDK is documented in [api.md](api.md).
 ## Installation
 
 ```sh
-pip install aimlapi
+pip install aimlapi-sdk-python
 ```
 
 ## Quickstart
@@ -57,7 +57,7 @@ from aimlapi import AIMLAPI
 client = AIMLAPI()
 
 response = client.responses.create(
-    model="gpt-4o",
+    model="openai/gpt-5-2",
     instructions="You are a coding assistant that talks like a pirate.",
     input="How do I check if a Python object is an instance of a class?",
 )
@@ -66,6 +66,12 @@ print(response.output_text)
 ```
 
 > **Note:** The remaining sections mirror the upstream OpenAI README for advanced scenarios. Replace `openai` imports with `aimlapi` to reuse the same APIs against the AI/ML API service.
+
+While you can provide an `api_key` keyword argument,
+we recommend using [python-dotenv](https://pypi.org/project/python-dotenv/)
+to add `AIMLAPI_API_KEY="My API Key"` to your `.env` file
+so that your API key is not stored in source control.
+[Get an API key here](https://aimlapi.com/app/keys).
 
 ### Vision
 
@@ -76,7 +82,7 @@ prompt = "What is in this image?"
 img_url = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/2023_06_08_Raccoon1.jpg/1599px-2023_06_08_Raccoon1.jpg"
 
 response = client.responses.create(
-    model="gpt-4o-mini",
+    model="openai/gpt-5-2",
     input=[
         {
             "role": "user",
@@ -102,7 +108,7 @@ with open("path/to/image.png", "rb") as image_file:
     b64_image = base64.b64encode(image_file.read()).decode("utf-8")
 
 response = client.responses.create(
-    model="gpt-4o-mini",
+    model="openai/gpt-5-2",
     input=[
         {
             "role": "user",
@@ -132,7 +138,7 @@ client = AsyncAIMLAPI(
 
 async def main() -> None:
     response = await client.responses.create(
-        model="gpt-4o", input="Explain disestablishmentarianism to a smart five year old."
+        model="openai/gpt-5-2", input="Explain disestablishmentarianism to a smart five year old."
     )
     print(response.output_text)
 
@@ -150,19 +156,20 @@ You can enable this by installing `aiohttp`:
 
 ```sh
 # install from PyPI
-pip install aimlapi[aiohttp]
+pip install aimlapi-sdk-python[aiohttp]
 ```
 
 Then you can enable it by instantiating the client with `http_client=DefaultAioHttpClient()`:
 
 ```python
+import os
 import asyncio
 from aimlapi import AsyncAIMLAPI, DefaultAioHttpClient
 
 
 async def main() -> None:
     async with AsyncAIMLAPI(
-        api_key="My API Key",
+        api_key=os.environ.get("AIMLAPI_API_KEY"),  # This is the default and can be omitted
         http_client=DefaultAioHttpClient(),
     ) as client:
         chat_completion = await client.chat.completions.create(
@@ -172,7 +179,7 @@ async def main() -> None:
                     "content": "Say this is a test",
                 }
             ],
-            model="gpt-4o",
+            model="openai/gpt-5-2",
         )
 
 
@@ -189,7 +196,7 @@ from aimlapi import AIMLAPI
 client = AIMLAPI()
 
 stream = client.responses.create(
-    model="gpt-4o",
+    model="openai/gpt-5-2",
     input="Write a one-sentence bedtime story about a unicorn.",
     stream=True,
 )
@@ -209,7 +216,7 @@ client = AsyncAIMLAPI()
 
 async def main():
     stream = await client.responses.create(
-        model="gpt-4o",
+        model="openai/gpt-5-2",
         input="Write a one-sentence bedtime story about a unicorn.",
         stream=True,
     )
@@ -380,7 +387,7 @@ response = client.chat.responses.create(
             "content": "How much ?",
         }
     ],
-    model="gpt-4o",
+    model="openai/gpt-5-2",
     response_format={"type": "json_object"},
 )
 ```
@@ -534,7 +541,7 @@ All object responses in the SDK provide a `_request_id` property which is added 
 
 ```python
 response = await client.responses.create(
-    model="gpt-4o-mini",
+    model="openai/gpt-5-2",
     input="Say 'this is a test'.",
 )
 print(response._request_id)  # req_123
@@ -552,7 +559,7 @@ import aimlapi
 
 try:
     completion = await client.chat.completions.create(
-        messages=[{"role": "user", "content": "Say this is a test"}], model="gpt-4"
+        messages=[{"role": "user", "content": "Say this is a test"}], model="openai/gpt-5-2"
     )
 except aimlapi.APIStatusError as exc:
     print(exc.request_id)  # req_123
@@ -584,7 +591,7 @@ client.with_options(max_retries=5).chat.completions.create(
             "content": "How can I get the name of the current day in JavaScript?",
         }
     ],
-    model="gpt-4o",
+    model="openai/gpt-5-2",
 )
 ```
 
@@ -615,7 +622,7 @@ client.with_options(timeout=5.0).chat.completions.create(
             "content": "How can I list all files in a directory using Python?",
         }
     ],
-    model="gpt-4o",
+    model="openai/gpt-5-2",
 )
 ```
 
@@ -662,7 +669,7 @@ response = client.chat.completions.with_raw_response.create(
         "role": "user",
         "content": "Say this is a test",
     }],
-    model="gpt-4o",
+    model="openai/gpt-5-2",
 )
 print(response.headers.get('X-My-Header'))
 
@@ -695,7 +702,7 @@ with client.chat.completions.with_streaming_response.create(
             "content": "Say this is a test",
         }
     ],
-    model="gpt-4o",
+    model="openai/gpt-5-2",
 ) as response:
     print(response.headers.get("X-My-Header"))
 
