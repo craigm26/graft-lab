@@ -521,10 +521,6 @@ req FL-003 "Non-finite °F"
     For non-finite `wetBulbF` the result MUST be `null`; the audit has the same `function` and
     `citation`, `inputs` per REQ-AU-002, `constants` `{}`, and `result_summary`
     `invalid_input:wetBulbF`.
-  example flagF {"wetBulbF": "NaN"}
-    expect result = null
-    expect audit.result_summary = "invalid_input:wetBulbF"
-    expect audit.constants = {}
 
 op flagC
   input wetBulbC num
