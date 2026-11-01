@@ -15,7 +15,7 @@
 
 duramen 0.2
 
-spec heat-engine 1.5.0-slice
+spec heat-engine 1.6.0-slice
   title "Wet-bulb temperature and heat flags, with byte-exact audit records"
   contract 0.2.0
   request {"clock": "2026-05-26T17:00:00.000Z"}
@@ -468,7 +468,7 @@ section FL "Heat flags (MCO 6200.1E)"
     Primary source: U.S. Marine Corps Order 6200.1E, Marine Corps Heat Stress Program.
 
 op flagF
-  input wetBulbF num
+  input wetBulbF num, units? string
   returns flagResult
   result `flag` and `flagDartLabel` (REQ-FL-001)
   audit text
@@ -525,6 +525,15 @@ req FL-003 "Non-finite °F"
     expect result = null
     expect audit.result_summary = "invalid_input:wetBulbF"
     expect audit.constants = {}
+req FL-007 "Units"
+  text
+    `units` is optional. When present it MUST be `"F"`; any other value is a `bad_request` error, so a °C
+    reading sent to `flagF` by mistake is refused instead of classified as °F. Without it, `flagF` reads
+    `wetBulbF` as °F, as before.
+  example flagF {"wetBulbF": 86, "units": "F"}
+    expect result = {"flag": "yellow", "flagDartLabel": "high"}
+  example flagF {"wetBulbF": 30, "units": "C"}
+    expect error = "bad_request"
 
 op flagC
   input wetBulbC num

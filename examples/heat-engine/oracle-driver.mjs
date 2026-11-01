@@ -24,7 +24,7 @@ function strOrNull(i, k, optional) {
 const OPS = {
   wetBulb: (i, c) => O.wetBulb(num(i, 'tempC'), num(i, 'rhPercent'), c),
   wetBulbF: (i, c) => O.wetBulbF(num(i, 'tempF'), num(i, 'rhPercent'), c),
-  flagF: (i, c) => O.flagF(num(i, 'wetBulbF'), c),
+  flagF: (i, c) => { if (has(i, 'units') && i.units !== 'F') throw new Bad(); return O.flagF(num(i, 'wetBulbF'), c); },
   flagC: (i, c) => O.flagC(num(i, 'wetBulbC'), c),
   workRest: (i, c) => O.workRest(str(i, 'flag'), bool(i, 'acclimatized'), num(i, 'workMinutesRequested'), c),
   verdict: (i, c) => O.verdict(strOrNull(i, 'priorVerdict', false), strOrNull(i, 'priorFlag', true), str(i, 'currentFlag'), bool(i, 'hasAlternateAvailable'), c),
