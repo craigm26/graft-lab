@@ -15,7 +15,7 @@
 
 duramen 0.2
 
-spec heat-engine 1.5.0-slice
+spec heat-engine 1.5.1-slice
   title "Wet-bulb temperature and heat flags, with byte-exact audit records"
   contract 0.2.0
   request {"clock": "2026-05-26T17:00:00.000Z"}
@@ -515,7 +515,7 @@ req FL-002 "Flag audit record"
     | -60      | "wetBulbF=-60 → white (out_of_observed_range)"   |
     | 200      | "wetBulbF=200 → black"                           |
 
-req FL-003 "Non-finite °F"
+req FL-003 "Non-finite wet-bulb °F"
   decision D-007
   text
     For non-finite `wetBulbF` the result MUST be `null`; the audit has the same `function` and
