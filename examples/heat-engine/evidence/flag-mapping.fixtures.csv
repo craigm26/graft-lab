@@ -1,8 +1,8 @@
 id,source_ref,wet_bulb_f,expected_flag,expected_flag_dart_label,notes
 fm-001-far-below-white,usmc-6200-1e,40.0,white,low,Cold morning — clearly below all boundaries.
 fm-002-far-below-white,usmc-6200-1e,60.0,white,low,Cool spring afternoon.
-fm-003-just-below-white-green,usmc-6200-1e,79.99,white,low,Wet-bulb 0.01 °F below white/green boundary.
-fm-004-at-white-green,usmc-6200-1e,80.00,green,moderate,Wet-bulb exactly at white/green boundary (≥ 80 is green).
+fm-003-just-below-white-green,usmc-6200-1e,77.99,white,low,Wet-bulb 0.01 °F below white/green boundary.
+fm-004-at-white-green,usmc-6200-1e,78.00,green,moderate,Wet-bulb exactly at white/green boundary (≥ 78 is green).
 fm-005-just-above-white-green,usmc-6200-1e,80.01,green,moderate,Wet-bulb 0.01 °F above white/green boundary.
 fm-006-green-interior,usmc-6200-1e,82.50,green,moderate,Mid-green range.
 fm-007-just-below-green-yellow,usmc-6200-1e,84.99,green,moderate,Wet-bulb 0.01 °F below green/yellow boundary.

@@ -482,15 +482,15 @@ req FL-001 "Flag from °F"
 
     | flag | wet-bulb °F | label |
     |---|---|---|
-    | `white` | `w < 80` | `low` |
-    | `green` | `80 ≤ w < 85` | `moderate` |
+    | `white` | `w < 78` | `low` |
+    | `green` | `78 ≤ w < 85` | `moderate` |
     | `yellow` | `85 ≤ w < 88` | `high` |
     | `red` | `88 ≤ w < 90` | `extreme` |
     | `black` | `w ≥ 90` | `critical` |
   table flagF
     | wetBulbF | result.flag | result.flagDartLabel |
-    | 79.99    | "white"     | "low"                |
-    | 80       | "green"     | "moderate"           |
+    | 77.99    | "white"     | "low"                |
+    | 78       | "green"     | "moderate"           |
     | 84.99    | "green"     | "moderate"           |
     | 85       | "yellow"    | "high"               |
     | 88       | "red"       | "extreme"            |
@@ -502,11 +502,11 @@ req FL-002 "Flag audit record"
   text
     The audit: `function` `"flagFromWetBulbF"`; `citation` `"USMC 6200.1E Table 3-1"`;
     `inputs` `{"wetBulbF": wetBulbF}`; `constants`
-    `{"white_max":80,"green_max":85,"yellow_max":88,"red_max":90}`; `result_summary`
+    `{"white_max":78,"green_max":85,"yellow_max":88,"red_max":90}`; `result_summary`
     `wetBulbF=<w> → <flag>` with `<w>` as number text, followed by ` (out_of_observed_range)`
     when `wetBulbF < -50` or `wetBulbF > 200`.
   example flagF {"wetBulbF": 86.5}
-    expect audit.constants = {"white_max": 80, "green_max": 85, "yellow_max": 88, "red_max": 90}
+    expect audit.constants = {"white_max": 78, "green_max": 85, "yellow_max": 88, "red_max": 90}
     expect audit.inputs = {"wetBulbF": 86.5}
   table flagF
     | wetBulbF | audit.result_summary                             |
@@ -540,7 +540,7 @@ req FL-004 "Flag from °C"
     boundaries), then classify as `flagF`. The result MUST be the `flagF` result.
   table flagC
     | wetBulbC           | result.flag |
-    | 26.66666666666666  | "white"     |
+    | 26.66666666666666  | "green"     |
     | 30                 | "yellow"    |
     | 29.444444444444443 | "yellow"    |
     | 29.444444443444443 | "green"     |
@@ -561,7 +561,7 @@ req FL-005 "°C flag audit record"
     expect audit.result_summary = "wetBulbC=30 → wetBulbF=86.0000 → yellow"
     expect audit.children.0.result_summary = "wetBulbF=86 → yellow"
   example flagC {"wetBulbC": 26.66666666666666}
-    expect audit.result_summary = "wetBulbC=26.66666666666666 → wetBulbF=80.0000 → white"
+    expect audit.result_summary = "wetBulbC=26.66666666666666 → wetBulbF=80.0000 → green"
   example flagC {"wetBulbC": 1.7976931348623157e+308}
     expect result = null
     expect audit.result_summary = "wetBulbC=1.7976931348623157e+308 → wetBulbF=Infinity → invalid_input:wetBulbF"

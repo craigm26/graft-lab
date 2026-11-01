@@ -78,10 +78,10 @@ export const wetBulbF = (tempF, rhPercent, clock) => wetBulb(((tempF - 32) * 5) 
 
 // ---- flags (SPEC § 5)
 const FLAG_CITE = 'USMC 6200.1E Table 3-1';
-const BOUNDS = { white_max: 80, green_max: 85, yellow_max: 88, red_max: 90 };
+const BOUNDS = { white_max: 78, green_max: 85, yellow_max: 88, red_max: 90 };
 const LABEL = { white: 'low', green: 'moderate', yellow: 'high', red: 'extreme', black: 'critical' };
 export const FLAGS = ['white', 'green', 'yellow', 'red', 'black'];
-const band = (w) => (w < 80 ? 'white' : w < 85 ? 'green' : w < 88 ? 'yellow' : w < 90 ? 'red' : 'black');
+const band = (w) => (w < 78 ? 'white' : w < 85 ? 'green' : w < 88 ? 'yellow' : w < 90 ? 'red' : 'black');
 
 export function flagF(w, clock) {
   if (!Number.isFinite(w)) {
