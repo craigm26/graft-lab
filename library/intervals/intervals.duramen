@@ -1,0 +1,108 @@
+# intervals: a small TypeScript library, kept as Graft's library-driver fixture (roadmap 3.6). Its .graft file says it
+# is a library, so the builder writes the library and Graft writes the driver that judges it.
+
+duramen 0.2
+
+spec intervals 1.0.0
+  title "Closed integer intervals: merge, total length, membership"
+  text
+    `intervals` works on closed intervals of integers. An *interval* is an object
+    `{"start": s, "end": e}` with integers `s <= e`; it holds every integer from `s` to `e`,
+    both included. Its *length* is `e - s`.
+
+    Every op takes `items`, a list of intervals, in any order, possibly overlapping.
+
+oracle node oracle.mjs
+  source oracle.mjs
+
+type interval = {start: integer in -1000000 .. 1000000, end: integer in -1000000 .. 1000000}
+
+section IV "Intervals"
+
+errors
+  bad_request when the line is not a JSON object (the answer then has `"id": null`)
+  unknown_op when `op` is missing or is not merge, total or contains
+  bad_request when `items` is missing or not a list, or one of its entries is not an object
+    with integer `start` and `end`, or `point` is missing or not an integer
+  bad_interval when an interval's `start` is greater than its `end`
+
+op merge
+  input items interval[]
+  returns interval[]
+  result the merged intervals, sorted by start
+  draw items {start: integer in -20 .. 20, end: integer in -20 .. 40}[]
+
+op total
+  input items interval[]
+  returns integer
+  result the total length covered by the merged intervals
+  draw items {start: integer in -20 .. 20, end: integer in -20 .. 40}[]
+
+op contains
+  input items interval[], point integer
+  returns boolean
+  result whether any interval holds the point
+  draw items {start: integer in -20 .. 20, end: integer in -20 .. 40}[], point integer in -25 .. 45
+
+req IV-001 "Merge"
+  text
+    `merge` MUST answer the fewest intervals that hold exactly the integers the input's
+    intervals hold, sorted by `start`. Two intervals that overlap, or that touch (one's `end`
+    equals the other's `start`), become one. An empty list merges to an empty list.
+  example merge {"items": []}
+    expect result = []
+  example merge {"items": [{"start": 5, "end": 8}, {"start": 1, "end": 3}]}
+    expect result = [{"start": 1, "end": 3}, {"start": 5, "end": 8}]
+  example merge {"items": [{"start": 1, "end": 4}, {"start": 2, "end": 6}]}
+    expect result = [{"start": 1, "end": 6}]
+  example merge {"items": [{"start": 1, "end": 3}, {"start": 3, "end": 5}]}
+    expect result = [{"start": 1, "end": 5}]
+  example merge {"items": [{"start": 1, "end": 10}, {"start": 2, "end": 3}, {"start": 12, "end": 12}]}
+    expect result = [{"start": 1, "end": 10}, {"start": 12, "end": 12}]
+  example merge {"items": [{"start": -4, "end": -1}, {"start": 0, "end": 2}]}
+    expect result = [{"start": -4, "end": -1}, {"start": 0, "end": 2}]
+
+req IV-002 "Total length"
+  text
+    `total` MUST answer the sum of the lengths of the intervals `merge` would answer.
+  example total {"items": []}
+    expect result = 0
+  example total {"items": [{"start": 1, "end": 4}, {"start": 2, "end": 6}]}
+    expect result = 5
+  example total {"items": [{"start": 1, "end": 3}, {"start": 5, "end": 8}]}
+    expect result = 5
+  example total {"items": [{"start": 7, "end": 7}]}
+    expect result = 0
+
+req IV-003 "Membership"
+  text
+    `contains` MUST answer true when some interval holds `point` (its ends included), and
+    false otherwise.
+  example contains {"items": [{"start": 1, "end": 3}], "point": 3}
+    expect result = true
+  example contains {"items": [{"start": 1, "end": 3}], "point": 4}
+    expect result = false
+  example contains {"items": [], "point": 0}
+    expect result = false
+  example contains {"items": [{"start": -5, "end": -2}, {"start": 4, "end": 9}], "point": 0}
+    expect result = false
+
+req IV-004 "Bad input"
+  text
+    An input that breaks the rules under Errors MUST be answered with that error code, the
+    first that applies.
+  example merge {"items": [{"start": 3, "end": 1}]}
+    expect error = "bad_interval"
+  example total {"items": [{"start": 0, "end": 1}, {"start": 9, "end": 2}]}
+    expect error = "bad_interval"
+  example merge {"items": [{"start": 1.5, "end": 3}]}
+    expect error = "bad_request"
+  example contains {"items": [{"start": 1, "end": 3}]}
+    expect error = "bad_request"
+  example merge {"items": "1-3"}
+    expect error = "bad_request"
+  example raw "not json"
+    expect id = null
+    expect error = "bad_request"
+  example raw '{"id":"r1","op":"split","input":{"items":[]}}'
+    expect error = "unknown_op"
