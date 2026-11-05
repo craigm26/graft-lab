@@ -1,0 +1,247 @@
+duramen 0.1
+
+section SY "Reading a file"
+  text
+    The examples in this section are records with problems in their form. A record with such a
+    problem is not checked further (REQ-RC-005), so most of them need no oracle.
+
+req SY-001 "Lines"
+  decision D-004, D-014, D-018, D-020
+  text
+    A file MUST be read as UTF-8 text, with a byte order mark at its start ignored, and with CR
+    LF and a lone CR each ending a line as LF does. White space at the end of a line MUST be
+    ignored, and a line holding only white space is blank. A line's indent is the number of
+    spaces it starts with; a line whose leading white space holds anything but spaces (a tab,
+    for instance) MUST get P001 and is otherwise ignored. White space, here and everywhere in
+    this document, is what ECMAScript's `\s` matches: tab, LF, U+000B, U+000C, CR, space,
+    U+00A0, U+1680, U+2000 to U+200A, U+2028, U+2029, U+202F, U+205F, U+3000 and U+FEFF.
+    U+2028 and U+2029 end no line: inside one, they are white space like the others, and they
+    may stand in a quoted string, a JSON value, a raw line or a path as any character may.
+  example check {"files": {"s.duramen": "\ufeffduramen 0.1\r\nspec s 1\rnote  \n  text\t\n    Some text.  \r\n"}}
+    expect result.diagnostics = []
+  example check {"files": {"s.duramen": "duramen 0.1\nspec s 1\n\tnote\n"}}
+    expect result.diagnostics = ["s.duramen:3: error P001"]
+  example check {"files": {"s.duramen": "duramen 0.1\nspec s 1\nnote\n  \ttext\n"}}
+    expect result.diagnostics = ["s.duramen:4: error P001"]
+  example check {"files": {"s.duramen": "duramen 0.1\nspec s 1\n\u00a0note\n"}}
+    expect result.diagnostics = ["s.duramen:3: error P001"]
+  example check {"files": {"s.duramen": "  \t \nduramen 0.1\n\t\nspec s 1\n   \n"}}
+    expect result.diagnostics = []
+  example check {"files": {"s.duramen": "duramen 0.1\u3000\nspec s 1\u2028\nnote\n\u205f text\n"}}
+    expect result.diagnostics = ["s.duramen:4: error P001"]
+  example check {"files": {"s.duramen": "duramen 0.1\nspec s 1\n  title \"a\u2028b\"\noracle node echo.mjs\nop f\n  input x? {a:\u2029b}, y? json\nerrors\n  e when x\u2028y\nreq A \"A\u2029title\"\n  example f {\"x\": \"p\u2028q\"}\n    expect result.x = \"p\u2028q\"\n    expect result.x\u2028=\u2029\"p\u2028q\"\n  example f {}\n    input y.\"k\u2028l\"\n      text\n    expect result.y = {\"k\u2028l\": \"text\\n\"}\n  example raw '{\"id\":\"r\",\"op\":\"f\",\"input\":{\"x\":\"\u2028\"}}'\n  example f {\"x\": 1}\n    expect result.x\u2028\u2248\u20281\u2029\u00b1\u20290\n"}}
+    input files."echo.mjs" from "fixtures/echo.mjs"
+    expect result.diagnostics = []
+
+req SY-002 "Statements and comments"
+  text
+    A line with indent 0 MUST start a statement, unless it starts with `#`, which makes it a
+    comment. The statement's keyword is its first word: `duramen`, `spec`, `oracle`,
+    `section`, `op`, `errors`, `req`, `open`, `decision` and `note` are the statements of the
+    core language, and `type`, `edge`, `edgedef`, `property` and `evidence` belong to the rest
+    of it (OPEN-RC-001). A line whose first word is none of these MUST get P002, and the lines
+    of its body MUST be ignored; the body of a statement is the lines after it, up to the next
+    statement. An indented line before the first statement of a file MUST get P003.
+  example check {}
+    input files."s.duramen"
+      # A comment.
+      duramen 0.1
+      #A comment too.
+      spec s 1
+      frobnicate this
+        title "ignored"
+          ignored too
+      Note
+    expect result.diagnostics = ["s.duramen:5: error P002", "s.duramen:8: error P002"]
+  example check {}
+    input files."s.duramen"
+        indented
+       # indented too
+      duramen 0.1
+      spec s 1
+    expect result.diagnostics = ["s.duramen:1: error P003", "s.duramen:2: error P003"]
+
+req SY-003 "Clauses"
+  decision D-005, D-011, D-013, D-017, D-018, D-023
+  text
+    The body of a statement MUST be read as clauses. A line indented two spaces starts a
+    clause, whose keyword is its first word, unless it starts with `#`, which makes it a
+    comment. A line indented three spaces or more belongs to the latest clause, and MUST get
+    P006 when the statement has no clause before it, even when it starts with `#`; a line
+    indented one space MUST get P007, even when it starts with `#`.
+
+    Each statement takes the clauses REQ-SY-004 to REQ-SY-012 name. Any other clause MUST get
+    P015 at its line, and the lines under it MUST be ignored. Some clauses are taken at most
+    once by a statement: `title`, `contract`, `request` and `text` of `spec`; `result`,
+    `audit` and `request` of `op`; `text` and `on` of `req`; `source`, `status` and `text` of
+    `decision`; and `text` of `section`, `open` and `note`. A second one MUST get P052 at its
+    line and is otherwise ignored, with the lines under it, also when the first one got a
+    problem of its own (unlike an example's `request` lines, REQ-SY-010). An operation's
+    fields and tolerances are once per name and per path instead (REQ-SY-007).
+
+    Only `text`, `example` and `table` clauses, and the clauses of `errors`, take lines of
+    their own; under any other clause, a line that is neither blank nor a comment (starting
+    with `#`) MUST get P006.
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      note
+        # A comment.
+        text
+          Text.
+          # Text, not a comment.
+    expect result.diagnostics = []
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      note
+       text
+    expect result.diagnostics = ["s.duramen:4: error P007"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      note
+          Text without a clause.
+        text
+          Text.
+    expect result.diagnostics = ["s.duramen:4: error P006"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      op f
+        audit
+        audit text
+    expect result.diagnostics = ["s.duramen:5: error P052"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+        colour blue
+          more
+      note
+        example f {}
+          expect result = 1
+    expect result.diagnostics = ["s.duramen:3: error P015", "s.duramen:6: error P015"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      note
+       # not a comment here
+          # nor here
+        text
+          Text.
+    expect result.diagnostics = ["s.duramen:4: error P007", "s.duramen:5: error P006"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+        title "one"
+        title "two"
+          more
+      note
+        text
+          One.
+        text Two.
+      decision D "d"
+        source a
+        source b
+        status accepted
+        status rejected
+    expect result.diagnostics = ["s.duramen:4: error P052", "s.duramen:9: error P052", "s.duramen:12: error P052", "s.duramen:14: error P052"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+        title x
+        title "two"
+      op f
+        request [1]
+        request {}
+    expect result.diagnostics = ["s.duramen:3: error P004", "s.duramen:4: error P052", "s.duramen:6: error P009", "s.duramen:7: error P052"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+        title "A title"
+          that goes on
+        # A comment.
+          # Another.
+    expect result.diagnostics = ["s.duramen:4: error P006"]
+
+req SY-004 "The duramen, spec and oracle statements"
+  decision D-015
+  text
+    `duramen <version>` takes no clauses. `spec <name> <version>` names the program and the
+    version of this document: two words with nothing after them, else P021 at its line. It
+    takes the clauses `title "<title>"` (a quoted string, REQ-SY-006), `text` (REQ-SY-005),
+    `contract <version>` (the version of what the program writes, for the brief; with nothing
+    after the keyword, it states none), and
+    `request <JSON object>`, members every request carries (REQ-SU-003). A request value that
+    is not JSON, or is JSON but not an object, MUST get P009, and one that sets `id`, `op` or
+    `input` P051. `oracle <command>` names the command that runs the oracle (REQ-OR-002); with
+    nothing after the keyword it MUST get P028, and its clauses are still read. It takes the
+    clause `source <file>, ...`, the files the oracle is made of, for tools that change them to
+    test the suite.
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+        title "x"
+      spec s 1
+    expect result.diagnostics = ["s.duramen:2: error P015"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s
+    expect result.diagnostics = ["s.duramen:2: error P021"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1 2
+    expect result.diagnostics = ["s.duramen:2: error P021"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1.0.0-beta
+        title "The s program"
+        contract s-out-2
+        request {"clock": "2026-01-01T00:00:00Z", "n": 1}
+        text
+          What s is.
+    expect result.diagnostics = []
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+        request {"clock":
+    expect result.diagnostics = ["s.duramen:3: error P009"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+        request ["clock"]
+    expect result.diagnostics = ["s.duramen:3: error P009"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+        request {"op": "x"}
+    expect result.diagnostics = ["s.duramen:3: error P051"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      oracle
+    expect result.diagnostics = ["s.duramen:3: error P028"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      oracle node model.mjs --quiet
+        source model.mjs, lib/a.mjs lib/b.mjs
+        timeout 5
+    expect result.diagnostics = ["s.duramen:5: error P015"]

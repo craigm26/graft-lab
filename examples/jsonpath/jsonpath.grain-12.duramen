@@ -1,0 +1,643 @@
+# jsonpath: JSONPath queries over JSON values, as RFC 9535 defines them, with RFC 9485
+# (I-Regexp) for the regular expressions of match() and search(). Brief C of claim 7 in
+# CONFIDENCE-2.md: written from the two RFC texts alone (rfc-editor.org; their sha256 are pinned
+# there). No JSONPath implementation, test suite or compliance suite was opened to write it. The
+# oracle is oracle.mjs, written to this record.
+
+duramen 0.2
+
+spec jsonpath 1.0.0
+  title "JSONPath queries (RFC 9535): segments, selectors, filters, functions and normalized paths"
+  text
+    `jsonpath` evaluates a JSONPath query, as RFC 9535 defines it, against a JSON value (the
+    *document*, RFC 9535's "query argument"), and returns the nodes the query selects: their
+    values, and their locations as Normalized Paths. A query that is not well formed and valid
+    is reported as an error and never evaluated.
+
+    Terms are RFC 9535's. A *node* is a value together with its location in the document; the
+    *children* of an array are its elements, and those of an object its member values (member
+    names are not nodes); the *descendants* of a node are its children, their children, and so
+    on. A *nodelist* is a list of nodes, possibly empty, possibly holding a node more than once.
+    A query is `$` followed by *segments*; each segment holds one or more *selectors*; each
+    segment is applied to every node of the nodelist the previous one produced, in order.
+
+    A *code point* here is a Unicode scalar value: a query, a member name and a string are
+    sequences of code points, not of UTF-16 code units or bytes. *Blank space* is the four
+    characters space (U+0020), horizontal tab (U+0009), line feed (U+000A) and carriage return
+    (U+000D), and nothing else.
+
+oracle node driver.mjs
+  source oracle.mjs
+
+type sampleScalar = 0 | 1 | 2 | -1 | 1.5 | "a" | "b" | "ab" | "" | "é" | "😀" | true | false | null
+type sampleLeaf = sampleScalar | sampleScalar[] | {}
+type sampleInner = sampleLeaf | sampleLeaf[] | {a?: sampleLeaf, b?: sampleLeaf, "'"?: sampleLeaf, "a b"?: sampleLeaf, "\n"?: sampleLeaf, "😀"?: sampleLeaf, "10"?: sampleLeaf, "9"?: sampleLeaf}
+type sampleDocument = sampleInner[] | {a?: sampleInner, b?: sampleInner, "'"?: sampleInner, "\\"?: sampleInner, "\u000b"?: sampleInner, "é"?: sampleInner, "😀"?: sampleInner, "\uffff"?: sampleInner, "10"?: sampleInner, "9"?: sampleInner, "x"?: sampleInner}
+
+# ---------------------------------------------------------------------------------------------
+section RQ "Requests"
+
+errors
+  bad_request when the line is not a JSON object, or `id` is missing or not a string (the
+    response then has `"id": null`)
+  unknown_op when `op` is missing, not a string, or not `query`
+  bad_request when `input` is missing or not an object, `input.query` is missing or not a
+    string, or `input.document` is missing
+  invalid_query when `input.query` is not a well-formed and valid JSONPath query
+
+op query
+  input query string, document any
+  returns {values: any[], paths: string[]}
+  result `values`, the values of the nodes the query selects, in the order of the nodelist, and `paths`, the normalized path of each of those nodes, in the same order
+
+req RQ-001 "Requests that cannot be handled"
+  text
+    A request line that cannot be handled MUST get exactly `{"id": <id>, "error": <code>}`,
+    with the code given by the numbered list under Errors, and the driver MUST then go on to
+    the next line.
+  example raw "{not json"
+    expect id = null
+    expect error = "bad_request"
+  example raw "[1]"
+    expect id = null
+    expect error = "bad_request"
+  example raw '{"op":"query","input":{"query":"$","document":1}}'
+    expect id = null
+    expect error = "bad_request"
+  example raw '{"id":7,"op":"query","input":{"query":"$","document":1}}'
+    expect id = null
+    expect error = "bad_request"
+  example query {"query": "$", "document": 1}
+    omit op
+    expect error = "unknown_op"
+  example raw '{"id":"r1","op":"select","input":{"query":"$","document":1}}'
+    expect error = "unknown_op"
+  example query
+    expect error = "bad_request"
+  example raw '{"id":"r1","op":"query","input":[]}'
+    expect error = "bad_request"
+  table query
+    | query | document | error |
+    |       | 1        | "bad_request" |
+    | 5     | 1        | "bad_request" |
+    | null  | 1        | "bad_request" |
+    | "$"   |          | "bad_request" |
+    | "$["  | 1        | "invalid_query" |
+
+req RQ-002 "The result"
+  decision D-005
+  text
+    For a query that is well formed and valid, the driver MUST respond
+    `{"id": <id>, "result": {"values": [...], "paths": [...]}}`. `values` holds the value of
+    each node of the nodelist the query selects, in the nodelist's order, and `paths` the
+    Normalized Path of each of those nodes (REQ-NP-001), in the same order, so the two arrays
+    have the same length. A node selected more than once appears that many times in both. An
+    empty nodelist is a result like any other: both arrays empty.
+  example query {"query": "$", "document": {"k": "v"}}
+    expect result = {"values": [{"k": "v"}], "paths": ["$"]}
+  example query {"query": "$.x", "document": {"k": "v"}}
+    expect result = {"values": [], "paths": []}
+  example query {"query": "$[0,0]", "document": ["a"]}
+    expect result = {"values": ["a", "a"], "paths": ["$[0]", "$[0]"]}
+
+req RQ-003 "Any JSON value is a document"
+  text
+    `input.document` is the document: any JSON value, an object, an array, a string, a number,
+    `true`, `false` or `null`. A member of the request or of `input` that this document does
+    not name MUST be ignored.
+  table query
+    | query  | document | result.values | result.paths |
+    | "$"    | null     | [null]        | ["$"]        |
+    | "$"    | false    | [false]       | ["$"]        |
+    | "$"    | "abc"    | ["abc"]       | ["$"]        |
+    | "$"    | 1.5      | [1.5]         | ["$"]        |
+    | "$"    | []       | [[]]          | ["$"]        |
+    | "$.*"  | 1        | []            | []           |
+    | "$[0]" | "abc"    | []            | []           |
+  example raw '{"id":"r1","op":"query","trace":true,"input":{"query":"$.a","document":{"a":1},"flags":"x"}}'
+    expect result = {"values": [1], "paths": ["$['a']"]}
+
+req RQ-004 "Queries that are not well formed and valid"
+  text
+    A query that is not well formed (it does not follow the grammar of the SY section) or not
+    valid (an integer out of range, REQ-SY-004, or a function expression that is not well
+    typed, REQ-SY-011) MUST get the error `invalid_query`, whatever the document: whether a
+    query is well formed and valid never depends on the document. A query that is well formed
+    and valid MUST NOT get an error, whatever the document: where it finds nothing to select,
+    it selects nothing.
+  table query
+    | query                    | document | error           |
+    | "$["                     | null     | "invalid_query" |
+    | "$[?length(@.*) < 3]"    | []       | "invalid_query" |
+    | "$.a[?length(@.*) < 3]"  | {"b": 1} | "invalid_query" |
+  table query
+    | query               | document               | result.values |
+    | "$.a.b.c[5]['x']"   | {"a": 1}               | []            |
+    | "$[?@.a < 'b']"     | [1, [2], {"a": null}]  | []            |
+    | "$..[?@[-1] == 1]"  | "text"                 | []            |
+
+# ---------------------------------------------------------------------------------------------
+section SY "Well-formed and valid queries"
+  text
+    These requirements restate the grammar of RFC 9535 (its Appendix A collects it). A query
+    that does not follow it is not well formed and gets `invalid_query` (REQ-RQ-004). The
+    examples give each query with a document; for the ones that are well formed and valid, the
+    result shows what they select.
+
+req SY-001 "The root identifier and blank space"
+  text
+    A query MUST begin with `$`, with nothing before it, blank space included. After `$` come
+    zero or more segments (REQ-SY-002 to REQ-SY-006). Blank space MAY come before each segment,
+    and nowhere else at this level: not after the last segment, and not between a `.` or `..`
+    and what follows it. No other character is blank space: not form feed, NO-BREAK SPACE
+    (U+00A0), LINE SEPARATOR (U+2028) nor any other. `@` begins a query only inside a filter
+    (REQ-SY-007).
+  table query
+    | query                  | document          | result.values |
+    | "$"                    | {"a": 1}          | [{"a": 1}]    |
+    | "$ .a"                 | {"a": 1}          | [1]           |
+    | "$\t.a"                | {"a": 1}          | [1]           |
+    | "$\n['a']"             | {"a": 1}          | [1]           |
+    | "$\r\n.a \r\n.b"       | {"a": {"b": 2}}   | [2]           |
+  table query
+    | query        | document | error           |
+    | ""           | 1        | "invalid_query" |
+    | " $"         | 1        | "invalid_query" |
+    | "$ "         | 1        | "invalid_query" |
+    | "$\n"        | 1        | "invalid_query" |
+    | "$.a "       | {"a": 1} | "invalid_query" |
+    | "$\u000c.a"  | {"a": 1} | "invalid_query" |
+    | "$\u00a0.a"  | {"a": 1} | "invalid_query" |
+    | "$\u2028.a"  | {"a": 1} | "invalid_query" |
+    | "@"          | 1        | "invalid_query" |
+    | "@.a"        | {"a": 1} | "invalid_query" |
+    | "$$"         | 1        | "invalid_query" |
+    | "a"          | 1        | "invalid_query" |
+    | "$a"         | {"a": 1} | "invalid_query" |
+
+req SY-002 "Dot notation"
+  text
+    `.name` is shorthand for `['name']`, and `..name` for `..['name']`; `.*` is shorthand for
+    `[*]`, and `..*` for `..[*]`. A name written this way MUST begin with an ASCII letter
+    (`A`-`Z`, `a`-`z`), `_`, or a code point from U+0080 up, and go on with those or the ASCII
+    digits `0`-`9`. Nothing else may follow a `.` or a `..`: not blank space, a digit, `$`,
+    `-`, a quote, DEL (U+007F), or nothing at all; and a single `.` is not followed by `[`.
+    `..` on its own is not a segment. Words such as `true` and `null` are names here like any
+    other.
+  table query
+    | query          | document              | result.values |
+    | "$.a"          | {"a": 1}              | [1]           |
+    | "$._"          | {"_": 1}              | [1]           |
+    | "$._a1"        | {"_a1": 1}            | [1]           |
+    | "$.A"          | {"A": 1, "a": 2}      | [1]           |
+    | "$.é"          | {"é": 1}              | [1]           |
+    | "$.\u0080x"    | {"\u0080x": 1}        | [1]           |
+    | "$.😀"         | {"😀": 1}             | [1]           |
+    | "$.a1b2"       | {"a1b2": 1}           | [1]           |
+    | "$.true"       | {"true": 1}           | [1]           |
+    | "$.null"       | {"null": 1}           | [1]           |
+    | "$.a.b"        | {"a": {"b": 1}}       | [1]           |
+    | "$..a"         | {"x": {"a": 1}}       | [1]           |
+    | "$.*"          | {"a": 1}              | [1]           |
+    | "$..*"         | {"a": [1]}            | [[1], 1]      |
+    | "$..['a']"     | {"a": 1}              | [1]           |
+    | "$.Z"          | {"Z": 1}              | [1]           |
+    | "$.z"          | {"z": 1}              | [1]           |
+    | "$.a0z9"       | {"a0z9": 1}           | [1]           |
+  table query
+    | query          | document              | error           |
+    | "$."           | {"a": 1}              | "invalid_query" |
+    | "$.."          | {"a": 1}              | "invalid_query" |
+    | "$..."         | {"a": 1}              | "invalid_query" |
+    | "$...a"        | {"a": 1}              | "invalid_query" |
+    | "$.1"          | {"1": 1}              | "invalid_query" |
+    | "$.1a"         | {"1a": 1}             | "invalid_query" |
+    | "$.$"          | {"$": 1}              | "invalid_query" |
+    | "$.-a"         | {"-a": 1}             | "invalid_query" |
+    | "$.a-b"        | {"a-b": 1}            | "invalid_query" |
+    | "$. a"         | {"a": 1}              | "invalid_query" |
+    | "$.. a"        | {"a": 1}              | "invalid_query" |
+    | "$.\ta"        | {"a": 1}              | "invalid_query" |
+    | "$.'a'"        | {"a": 1}              | "invalid_query" |
+    | "$.[0]"        | [1]                   | "invalid_query" |
+    | "$.\u007f"     | {"\u007f": 1}         | "invalid_query" |
+    | "$.a b"        | {"a b": 1}            | "invalid_query" |
+    | "$.@a"         | {"@a": 1}             | "invalid_query" |
+    | "$.`a"         | {"`a": 1}             | "invalid_query" |
+    | "$.{a"         | {"{a": 1}             | "invalid_query" |
+
+req SY-003 "String literals"
+  text
+    A member name in brackets is a string literal: code points between single quotes `'...'`
+    or between double quotes `"..."`. Inside it, every code point from U+0020 up stands for
+    itself, except the backslash `\` and the delimiting quote; the other quote stands for
+    itself. The escapes are `\b` (U+0008), `\t` (U+0009), `\n` (U+000A), `\f` (U+000C), `\r`
+    (U+000D), `\/` (`/`), `\\` (`\`), `\'` inside single quotes only, `\"` inside double quotes
+    only, and `\u` followed by exactly four hexadecimal digits (`0`-`9`, `A`-`F` in either case;
+    the `u` lower case), which stands for that code point. A code point beyond U+FFFF is
+    escaped as a high surrogate escape (`\uD800` to `\uDBFF`) followed at once by a low one
+    (`\uDC00` to `\uDFFF`). A string literal MUST be rejected (`invalid_query`) when it holds a
+    code point below U+0020 as itself, any other escape, a `\u` with fewer than four
+    hexadecimal digits, a surrogate escape that is not part of such a pair, or no closing
+    quote. String literals in filters (REQ-SY-008) are written the same way.
+  table query
+    | query                    | document                    | result.values |
+    | "$['a']"                 | {"a": 1, "b": 2}            | [1]           |
+    | "$[\"a\"]"               | {"a": 1, "b": 2}            | [1]           |
+    | "$['\\'']"               | {"'": 2}                    | [2]           |
+    | "$[\"'\"]"               | {"'": 2}                    | [2]           |
+    | "$['\"']"                | {"\"": 3}                   | [3]           |
+    | "$[\"\\\"\"]"            | {"\"": 3}                   | [3]           |
+    | "$['\\\\']"              | {"\\": 4}                   | [4]           |
+    | "$['\\/']"               | {"/": 5}                    | [5]           |
+    | "$['/']"                 | {"/": 5}                    | [5]           |
+    | "$['\\n']"               | {"\n": 6}                   | [6]           |
+    | "$['\\u000A']"           | {"\n": 6}                   | [6]           |
+    | "$['\\u000a']"           | {"\n": 6}                   | [6]           |
+    | "$['\\u00e9']"           | {"é": 7}                    | [7]           |
+    | "$['\\u00E9']"           | {"é": 7}                    | [7]           |
+    | "$['é']"                 | {"é": 7}                    | [7]           |
+    | "$['\\uD83D\\uDE00']"    | {"😀": 8}                   | [8]           |
+    | "$['\\ud83d\\ude00']"    | {"😀": 8}                   | [8]           |
+    | "$['😀']"                | {"😀": 8}                   | [8]           |
+    | "$['\\u000b']"           | {"\u000b": 9}               | [9]           |
+    | "$['a b']"               | {"a b": 10}                 | [10]          |
+    | "$['\u007f']"            | {"\u007f": 11}              | [11]          |
+    | "$['\u2028']"            | {"\u2028": 12}              | [12]          |
+    | "$['']"                  | {"": 13}                    | [13]          |
+    | "$['\\b\\f\\r\\t']"      | {"\b\f\r\t": 14}            | [14]          |
+    | "$['\\uD800\\uDC00']"    | {"\ud800\udc00": 15}        | [15]          |
+    | "$['\\uDBFF\\uDFFF']"    | {"\udbff\udfff": 16}        | [16]          |
+    | "$['\\uD7FF']"           | {"\ud7ff": 17}               | [17]          |
+    | "$['\\uE000']"           | {"\ue000": 18}               | [18]          |
+    | "$['\\u002F']"           | {"/": 19}                   | [19]          |
+    | "$['\\u002f']"           | {"/": 19}                   | [19]          |
+  table query
+    | query                    | document     | error           |
+    | "$['\\\"']"              | {"\"": 3}    | "invalid_query" |
+    | "$[\"\\'\"]"             | {"'": 2}     | "invalid_query" |
+    | "$['\\q']"               | {"q": 1}     | "invalid_query" |
+    | "$['\\x41']"             | {"A": 1}     | "invalid_query" |
+    | "$['\\U0041']"           | {"A": 1}     | "invalid_query" |
+    | "$['\\u004']"            | {"\u0004": 1} | "invalid_query" |
+    | "$['\\uD83D']"           | {"a": 1}     | "invalid_query" |
+    | "$['\\uDE00']"           | {"a": 1}     | "invalid_query" |
+    | "$['\\uD83Dx']"          | {"a": 1}     | "invalid_query" |
+    | "$['\\uD83D\\u0041']"    | {"a": 1}     | "invalid_query" |
+    | "$['\\uDBFF']"           | {"a": 1}     | "invalid_query" |
+    | "$['\\uDC00']"           | {"a": 1}     | "invalid_query" |
+    | "$['\\uDFFF']"           | {"a": 1}     | "invalid_query" |
+    | "$['\\uD800\\uDBFF']"    | {"a": 1}     | "invalid_query" |
+    | "$['\n']"                | {"\n": 6}    | "invalid_query" |
+    | "$['\t']"                | {"\t": 1}    | "invalid_query" |
+    | "$['\u0000']"            | {"a": 1}     | "invalid_query" |
+    | "$['\u001f']"            | {"a": 1}     | "invalid_query" |
+    | "$['a"                   | {"a": 1}     | "invalid_query" |
+    | "$['a\"]"                | {"a": 1}     | "invalid_query" |
+    | "$['a'"                  | {"a": 1}     | "invalid_query" |
+    | "$[a]"                   | {"a": 1}     | "invalid_query" |
+    | "$['a'b']"               | {"a": 1}     | "invalid_query" |
+
+req SY-004 "Index selectors and integers"
+  decision D-002
+  text
+    An index is written `0`, or an optional `-` followed by a digit `1`-`9` and any further
+    digits: no leading zeros (`01`), no `-0`, no `+`, no fraction, no exponent. Its value MUST
+    lie in the range of exact integers of I-JSON, -(2^53)+1 to (2^53)-1, that is
+    -9007199254740991 to 9007199254740991; outside that range the query is not valid. The
+    integers of a slice are written and bounded the same way (REQ-SY-005).
+  table query
+    | query                   | document     | result.values |
+    | "$[1]"                  | ["a", "b"]   | ["b"]         |
+    | "$[0]"                  | ["a"]        | ["a"]         |
+    | "$[-1]"                 | ["a", "b"]   | ["b"]         |
+    | "$[ 1 ]"                | ["a", "b"]   | ["b"]         |
+    | "$[9007199254740991]"   | ["a"]        | []            |
+    | "$[-9007199254740991]"  | ["a"]        | []            |
+  table query
+    | query                       | document | error           |
+    | "$[01]"                     | ["a"]    | "invalid_query" |
+    | "$[-0]"                     | ["a"]    | "invalid_query" |
+    | "$[+1]"                     | ["a"]    | "invalid_query" |
+    | "$[1.0]"                    | ["a"]    | "invalid_query" |
+    | "$[1e1]"                    | ["a"]    | "invalid_query" |
+    | "$[0x1]"                    | ["a"]    | "invalid_query" |
+    | "$[9007199254740992]"       | ["a"]    | "invalid_query" |
+    | "$[-9007199254740992]"      | ["a"]    | "invalid_query" |
+    | "$[99999999999999999999]"   | ["a"]    | "invalid_query" |
+    | "$[1 1]"                    | ["a"]    | "invalid_query" |
+    | "$[-]"                      | ["a"]    | "invalid_query" |
+    | "$[- 1]"                    | ["a"]    | "invalid_query" |
+    | "$[]"                       | ["a"]    | "invalid_query" |
+
+req SY-005 "Slice selectors"
+  decision D-002
+  text
+    A slice is written `start:end:step`. Each of the three is optional: `start` before the
+    first colon, `end` after it, and `step` after a second colon, which MAY be left out when
+    `step` is. Each is an integer, written and bounded as REQ-SY-004 says. Blank space MAY come
+    before and after each colon. A third colon is not well formed.
+  table query
+    | query                       | document          | result.values     |
+    | "$[:]"                      | ["a", "b", "c"]   | ["a", "b", "c"]   |
+    | "$[::]"                     | ["a", "b", "c"]   | ["a", "b", "c"]   |
+    | "$[1:]"                     | ["a", "b", "c"]   | ["b", "c"]        |
+    | "$[:2]"                     | ["a", "b", "c"]   | ["a", "b"]        |
+    | "$[::2]"                    | ["a", "b", "c"]   | ["a", "c"]        |
+    | "$[ 1 : 2 : 1 ]"            | ["a", "b", "c"]   | ["b"]             |
+    | "$[1: :1]"                  | ["a", "b", "c"]   | ["b", "c"]        |
+    | "$[::-1]"                   | ["a", "b", "c"]   | ["c", "b", "a"]   |
+    | "$[:9007199254740991]"      | ["a", "b", "c"]   | ["a", "b", "c"]   |
+    | "$[-9007199254740991:]"     | ["a", "b", "c"]   | ["a", "b", "c"]   |
+  table query
+    | query                       | document          | error           |
+    | "$[1:2:3:4]"                | ["a", "b", "c"]   | "invalid_query" |
+    | "$[-0:]"                    | ["a", "b", "c"]   | "invalid_query" |
+    | "$[:-0]"                    | ["a", "b", "c"]   | "invalid_query" |
+    | "$[::-0]"                   | ["a", "b", "c"]   | "invalid_query" |
+    | "$[01:]"                    | ["a", "b", "c"]   | "invalid_query" |
+    | "$[:9007199254740992]"      | ["a", "b", "c"]   | "invalid_query" |
+    | "$[::9007199254740992]"     | ["a", "b", "c"]   | "invalid_query" |
+    | "$[1.0:]"                   | ["a", "b", "c"]   | "invalid_query" |
+    | "$[1 2:]"                   | ["a", "b", "c"]   | "invalid_query" |
+
+req SY-006 "Bracketed selections"
+  text
+    A bracketed selection is `[`, one or more selectors separated by commas, and `]`, with
+    blank space allowed after `[`, before and after each comma, and before `]`. A selector is a
+    string literal (a name selector, REQ-SY-003), `*` (a wildcard), an index (REQ-SY-004), a
+    slice (REQ-SY-005), or a filter (`?` and a logical expression, REQ-SY-007). An empty
+    selection, an empty selector between commas, a trailing comma, and two selectors without a
+    comma between them are not well formed.
+  table query
+    | query                        | document           | result.values |
+    | "$['a','b']"                 | {"a": 1, "b": 2}   | [1, 2]        |
+    | "$[ 'a' , 'b' ]"             | {"a": 1, "b": 2}   | [1, 2]        |
+    | "$[\n'b',\t'a'\r]"           | {"a": 1, "b": 2}   | [2, 1]        |
+    | "$[*,'a']"                   | {"a": 1, "b": 2}   | [1, 2, 1]     |
+    | "$[?@ == 2, 'a']"            | {"a": 1, "b": 2}   | [2, 1]        |
+  table query
+    | query               | document           | error           |
+    | "$[ ]"              | {"a": 1}           | "invalid_query" |
+    | "$[,'a']"           | {"a": 1}           | "invalid_query" |
+    | "$['a',]"           | {"a": 1}           | "invalid_query" |
+    | "$['a',,'b']"       | {"a": 1}           | "invalid_query" |
+    | "$['a''b']"         | {"a": 1}           | "invalid_query" |
+    | "$['a' 'b']"        | {"a": 1}           | "invalid_query" |
+    | "$[['a']]"          | {"a": 1}           | "invalid_query" |
+    | "$['a']]"           | {"a": 1}           | "invalid_query" |
+    | "$[**]"             | {"a": 1}           | "invalid_query" |
+    | "$[*a]"             | {"a": 1}           | "invalid_query" |
+
+req SY-007 "Filter expressions"
+  text
+    A filter is `?`, optional blank space, and a logical expression. A logical expression is
+    one or more conjunctions joined by `||`; a conjunction is one or more basic expressions
+    joined by `&&`; blank space MAY come before and after `||` and `&&`. A basic expression is
+    one of:
+
+    1. a parenthesized logical expression, `(` and `)` around it, with blank space allowed
+       inside them at both ends, and optionally `!` before it (blank space allowed between);
+    2. a test: a query that begins with `@` or `$` (segments as REQ-SY-001 to REQ-SY-006 say),
+       or a function expression (REQ-SY-010), optionally with `!` before it (blank space
+       allowed between);
+    3. a comparison: a comparable, a comparison operator, and a comparable, with blank space
+       allowed before and after the operator. The operators are `==`, `!=`, `<`, `<=`, `>` and
+       `>=`. A comparable is a literal (REQ-SY-008), a singular query (REQ-SY-009), or a
+       function expression.
+
+    Nothing else is well formed. In particular, a literal on its own is not a test (`?true`,
+    `?1`); `!` applies only to a test or a parenthesized expression, so `!@.a == 1` and `!!@.a`
+    are not well formed; comparisons do not chain (`1 < 2 < 3`); and `&`, `|`, `and`, `or`,
+    `=`, `===`, `<>` and `=<` are not operators.
+  table query
+    | query                              | document              | result.values         |
+    | "$[?@]"                            | [1, 2, {"a": 1}]      | [1, 2, {"a": 1}]      |
+    | "$[? @]"                           | [1, 2, {"a": 1}]      | [1, 2, {"a": 1}]      |
+    | "$[?@ ]"                           | [1, 2, {"a": 1}]      | [1, 2, {"a": 1}]      |
+    | "$[?(@)]"                          | [1, 2, {"a": 1}]      | [1, 2, {"a": 1}]      |
+    | "$[?( @ )]"                        | [1, 2, {"a": 1}]      | [1, 2, {"a": 1}]      |
+    | "$[?!@.a]"                         | [1, 2, {"a": 1}]      | [1, 2]                |
+    | "$[?! @.a]"                        | [1, 2, {"a": 1}]      | [1, 2]                |
+    | "$[?!(@.a)]"                       | [1, 2, {"a": 1}]      | [1, 2]                |
+    | "$[?! ( @.a )]"                    | [1, 2, {"a": 1}]      | [1, 2]                |
+    | "$[?!(!@.a)]"                      | [1, 2, {"a": 1}]      | [{"a": 1}]            |
+    | "$[?@ == 1]"                       | [1, 2, {"a": 1}]      | [1]                   |
+    | "$[?@==1]"                         | [1, 2, {"a": 1}]      | [1]                   |
+    | "$[?1 == @]"                       | [1, 2, {"a": 1}]      | [1]                   |
+    | "$[?@ > 1 && @ < 3]"               | [1, 2, {"a": 1}]      | [2]                   |
+    | "$[?@ == 1 \|\| @.a]"              | [1, 2, {"a": 1}]      | [1, {"a": 1}]         |
+    | "$[?(@ == 1)]"                     | [1, 2, {"a": 1}]      | [1]                   |
+    | "$[?1 == 1]"                       | [1, 2, {"a": 1}]      | [1, 2, {"a": 1}]      |
+  table query
+    | query               | document     | error           |
+    | "$[?]"              | [1]          | "invalid_query" |
+    | "$[? ]"             | [1]          | "invalid_query" |
+    | "$[?()]"            | [1]          | "invalid_query" |
+    | "$[?true]"          | [1]          | "invalid_query" |
+    | "$[?false]"         | [1]          | "invalid_query" |
+    | "$[?null]"          | [1]          | "invalid_query" |
+    | "$[?1]"             | [1]          | "invalid_query" |
+    | "$[?'a']"           | [1]          | "invalid_query" |
+    | "$[?!@.a == 1]"     | [1]          | "invalid_query" |
+    | "$[?!!@.a]"         | [1]          | "invalid_query" |
+    | "$[?!1]"            | [1]          | "invalid_query" |
+    | "$[?1 < 2 < 3]"     | [1]          | "invalid_query" |
+    | "$[?@ & @]"         | [1]          | "invalid_query" |
+    | "$[?@ \| @]"        | [1]          | "invalid_query" |
+    | "$[?@ and @]"       | [1]          | "invalid_query" |
+    | "$[?@ or @]"        | [1]          | "invalid_query" |
+    | "$[?@ = 1]"         | [1]          | "invalid_query" |
+    | "$[?@ === 1]"       | [1]          | "invalid_query" |
+    | "$[?@ <> 1]"        | [1]          | "invalid_query" |
+    | "$[?@ =< 1]"        | [1]          | "invalid_query" |
+    | "$[?@ => 1]"        | [1]          | "invalid_query" |
+    | "$[?@ !== 1]"       | [1]          | "invalid_query" |
+    | "$[?(@]"            | [1]          | "invalid_query" |
+    | "$[?@)]"            | [1]          | "invalid_query" |
+    | "$[?@ == ]"         | [1]          | "invalid_query" |
+    | "$[?== 1]"          | [1]          | "invalid_query" |
+
+req SY-008 "Literals"
+  decision D-002
+  text
+    A literal is a number, a string literal (as in REQ-SY-003), `true`, `false` or `null`. A
+    number is an integer part (`0`, `-0`, or an optional `-` followed by a digit `1`-`9` and any
+    further digits), then optionally a fraction (`.` and one or more digits), then optionally an
+    exponent (`e` or `E`, an optional `+` or `-`, one or more digits). Its value is the number
+    it writes. `true`, `false` and `null` are lower case only. Anything else is not a literal:
+    `01`, `1.`, `.5`, `+1`, `1e`, `0x10`, `1_000`, `Infinity`, `NaN`, `True`, `NULL`, `nul`.
+    A number literal is not checked against the I-JSON range of REQ-SY-004 (decision D-002).
+  table query
+    | query                       | document                                         | result.values |
+    | "$[?@ == -0]"               | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [0]           |
+    | "$[?@ == 0.0]"              | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [0]           |
+    | "$[?@ == -0.0]"             | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [0]           |
+    | "$[?@ == 1e2]"              | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [100]         |
+    | "$[?@ == 1E2]"              | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [100]         |
+    | "$[?@ == 1e+2]"             | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [100]         |
+    | "$[?@ == 100.0e0]"          | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [100]         |
+    | "$[?@ == -1.5]"             | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [-1.5]        |
+    | "$[?@ == -15e-1]"           | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [-1.5]        |
+    | "$[?@ == 1e-3]"             | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [0.001]       |
+    | "$[?@ == true]"             | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [true]        |
+    | "$[?@ == null]"             | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | [null]        |
+    | "$[?@ == 'x']"              | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | ["x"]         |
+    | "$[?@ == \"x\"]"            | [0, 1, 100, -1.5, 0.001, true, null, "x"]        | ["x"]         |
+    | "$[?@ == 9007199254740993]" | ["a"]                                            | []            |
+    | "$[?@ == 1e400]"            | ["a"]                                            | []            |
+  table query
+    | query                  | document | error           |
+    | "$[?@ == 01]"          | [1]      | "invalid_query" |
+    | "$[?@ == 1.]"          | [1]      | "invalid_query" |
+    | "$[?@ == .5]"          | [1]      | "invalid_query" |
+    | "$[?@ == +1]"          | [1]      | "invalid_query" |
+    | "$[?@ == 1e]"          | [1]      | "invalid_query" |
+    | "$[?@ == 1e+]"         | [1]      | "invalid_query" |
+    | "$[?@ == 0x10]"        | [1]      | "invalid_query" |
+    | "$[?@ == 1_000]"       | [1]      | "invalid_query" |
+    | "$[?@ == Infinity]"    | [1]      | "invalid_query" |
+    | "$[?@ == NaN]"         | [1]      | "invalid_query" |
+    | "$[?@ == True]"        | [1]      | "invalid_query" |
+    | "$[?@ == NULL]"        | [1]      | "invalid_query" |
+    | "$[?@ == nul]"         | [1]      | "invalid_query" |
+    | "$[?@ == -]"           | [1]      | "invalid_query" |
+    | "$[?@ == --1]"         | [1]      | "invalid_query" |
+    | "$[?@ == 'x]"          | [1]      | "invalid_query" |
+
+# ---------------------------------------------------------------------------------------------
+section SE "Segments and selectors"
+  text
+    A query's nodelist starts as the document's root node (REQ-SE-001). Each segment is applied
+    to each node of the nodelist so far, in order, and the nodelists it produces for them are
+    concatenated, in the same order, into the next nodelist. A segment that finds nothing to
+    select for a node produces an empty nodelist for it, never an error; once a nodelist is
+    empty, the query's result is empty.
+
+# ---------------------------------------------------------------------------------------------
+section FI "Filters"
+  text
+    In the examples below that use the document `{"obj": {"x": "y"}, "arr": [2, 3]}` (the one
+    RFC 9535 uses for its comparison examples), the filter's expression does not depend on the
+    current node, so the query selects both of the document's children (`[2, 3]` and then
+    `{"x": "y"}`, in name order) when the expression is true, and nothing when it is false.
+
+# ---------------------------------------------------------------------------------------------
+section FN "Functions"
+
+# ---------------------------------------------------------------------------------------------
+section RX "Regular expressions (I-Regexp)"
+  text
+    The second argument of `match()` and `search()` is an I-Regexp, RFC 9485's interoperable
+    regular expression format. In the examples, each pattern is written inside a JSONPath
+    string literal, so a backslash in the pattern is written `\\` in the query, and the query
+    is in turn a JSON string in the request.
+
+# ---------------------------------------------------------------------------------------------
+section NP "Normalized Paths"
+
+# ---------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------
+# ---------------------------------------------------------------------------------------------
+section BU "The implementation folder"
+  text
+    These requirements are checked on the implementation folder, not through the driver.
+
+# ---------------------------------------------------------------------------------------------
+open OP-001 "Duplicate member names"
+  text
+    A document object with two or more members of the same name (RFC 9535, section 1.3: the
+    behavior becomes unpredictable).
+
+open OP-002 "Strings that are not sequences of Unicode scalar values"
+  text
+    A string or member name in the document, or a string in the query, that holds a lone
+    surrogate code point (JSON allows `\ud800` in its strings): how it compares, matches, is
+    counted by `length()`, or is written in a Normalized Path.
+
+open OP-003 "Numbers that I-JSON does not expect to interoperate"
+  text
+    Integers beyond -9007199254740991 to 9007199254740991, and numbers with more precision or
+    range than an IEEE 754 binary64 value, in the document or as literals in a query: how they
+    compare (RFC 9535, section 2.3.5.2.2, leaves that to the implementation), and how they are
+    written in `values`.
+
+open OP-004 "Resources"
+  text
+    Very large or deeply nested documents and queries, and very large quantifiers in an
+    I-Regexp: when an implementation runs out of time or memory, and what it then answers.
+
+open OP-005 "Unicode versions"
+  text
+    Code points whose General Category differs between versions of Unicode, or that one
+    version does not assign, in `\p{...}` and `\P{...}`.
+
+open OP-006 "Ranges and bounds in the wrong order"
+  text
+    A character class range whose first code point comes after its last (`[z-a]`), and a
+    quantifier `{n,m}` with n greater than m. RFC 9485 leaves their meaning to XSD: whether
+    such a string is an I-Regexp, and what it matches.
+
+open OP-007 "Standard error and error text"
+  text
+    What the driver writes to standard error; any human-readable error text, which never
+    appears in a response.
+
+open OP-008 "Odd request bytes"
+  text
+    Request bytes that are not valid UTF-8.
+
+# ---------------------------------------------------------------------------------------------
+decision D-001 "Object members in name order"
+  source RFC 9535, sections 2.3.2.2, 2.3.5.2 and 2.5.2.2 ("The order in which the children of an object appear in the resultant nodelist is not stipulated, since JSON objects are unordered"), and section 2.1.2 (an implementation "may produce distinct orderings in successive runs")
+  text
+    RFC 9535 lets an implementation take an object's members in any order, even a different
+    one each time. A suite cannot state a result that depends on that order, and two
+    implementations rebuilt from this record would answer the same request differently.
+    Decision: members are taken in ascending order of their names, compared code point by code
+    point (REQ-SE-008). Why: it is one of the orders the RFC allows; it does not depend on how a
+    JSON parser keeps members (JavaScript's JSON.parse puts names such as "10" before the
+    others, Python's json keeps the text's order); and it is the order REQ-FI-005 already gives
+    strings.
+  rejected "The order of the members in the request's JSON text: in JavaScript that needs a JSON parser of its own."
+  rejected "Leave the order open, as the RFC does: no example could state the result of a wildcard, a filter or a descendant segment over an object with two members or more."
+
+decision D-002 "The I-JSON range applies to indexes and slices"
+  source RFC 9535, section 2.1 ("Integer numbers in the JSONPath query that are relevant to the JSONPath processing (e.g., index values and steps) MUST be within the range of exact integer values defined in Internet JSON"), and sections 2.3.3.1 and 2.3.4.1
+  text
+    The RFC requires the range of integers "relevant to the JSONPath processing" and gives
+    index values and steps as its examples; the sections on index and slice selectors require
+    it of their integers. A number literal in a filter is compared as a number and never used
+    as an integer. Decision: the integers of index selectors and of slices (start, end and
+    step) are checked against the range; number literals in filters are not, whatever their
+    size. How such a literal compares is open (OP-003).
+  rejected "Check every integer-valued literal too: 2^53 in a comparison would make a query invalid, though nothing in the processing uses it as an integer."
+
+decision D-003 "Singular queries as the grammar writes them"
+  source RFC 9535, section 2.3.5.1 (singular-query-segments = *(S (name-segment / index-segment)); name-segment = ("[" name-selector "]") / ("." member-name-shorthand); index-segment = "[" index-selector "]"), and section 1.1 ("JSONPath expressions that always produce a singular nodelist but do not conform to the syntax in Section 2.3.5.1 are not singular queries")
+  text
+    The grammar of a singular query allows blank space before each segment but not inside its
+    brackets, where a bracketed selection elsewhere allows it (`[ 'a' ]`). Decision: the
+    grammar as written: `@[ 'a' ]` is a test like any query, but not a singular query, so as a
+    comparable or as an argument where a value is expected it makes the query invalid. Why: the
+    RFC states the rule in its ABNF, and says that a query is singular by its syntax, not by
+    what it selects.
+  rejected "Allow blank space inside a singular query's brackets, as in other bracketed selections: a rule the RFC's grammar does not have, however natural it looks."
+
+decision D-004 "A function the RFC does not define is not well typed"
+  source RFC 9535, section 2.4 ("A function extension defines a registered name ... that can be applied to a sequence of zero or more arguments"), section 2.4.3 (well-typedness rests on declared types), and section 3.2 (the five functions of the registry)
+  text
+    The grammar accepts any lower-case name as a function name; well-typedness rests on the
+    declared types that only a defined function has. Decision: `length`, `count`, `match`,
+    `search` and `value` are the functions; any other name, and a call with another number of
+    arguments, makes the query invalid. Why: without declared types the expression cannot be
+    well typed, and the RFC requires an error for a query that is not.
+  rejected "Treat an unknown function as false, or Nothing, when the query is evaluated: the RFC decides validity before evaluation, and allows no errors during it."
+
+decision D-005 "The result: values and Normalized Paths"
+  source RFC 9535, section 2.1.2 ("Depending on the specific API, it might be presented as an array of the JSON values at the nodes, an array of Normalized Paths referencing the nodes, or both")
+  text
+    Decision: both, as two arrays in the nodelist's order. Why: the paths say which node each
+    value came from, so a result can be checked for its order and its duplicates, and the
+    RFC's own examples give both.
+  rejected "Values only: two different nodes with equal values could not be told apart."

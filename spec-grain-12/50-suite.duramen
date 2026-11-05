@@ -1,0 +1,15 @@
+duramen 0.1
+
+section SU "The suite"
+  text
+    The suite is what judges an implementation: one case per example, each a request line and
+    what the response to it must hold. `cases` lists it, and `judge` compares an answer with a
+    case (REQ-JU-001); running it against an implementation is not part of this document
+    (OPEN-SU-001).
+
+open SU-001 "Running the suite"
+  text
+    How a suite is run against an implementation: the protocol cases on the stream itself
+    (exit status, bytes, one response per request in order), which response is a case's answer,
+    and the other kinds of case the rest of the language adds. How an answer is compared with a
+    case is REQ-JU-001 to REQ-JU-004.

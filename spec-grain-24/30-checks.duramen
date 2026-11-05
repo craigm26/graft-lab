@@ -1,0 +1,130 @@
+duramen 0.1
+
+section CK "Checking a record"
+  text
+    These checks run on a record that was read without errors (REQ-RC-005). Most example
+    records here have an oracle, the small program shown under Files (`fixtures/echo.mjs`),
+    which answers each request with its input as the result, so that their examples run
+    cleanly and the diagnostics shown are the ones each example is about.
+
+req CK-001 "Every requirement has an example"
+  text
+    A requirement with no example and no table row MUST get T001 at its line. (In the rest of
+    the language, a static check, a property or evidence can stand in for an example.)
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      req A "a"
+        text
+          It MUST work.
+    expect result.diagnostics = ["s.duramen:3: error T001"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      req A "a"
+        table f
+          | x |
+          |---|
+    expect result.diagnostics = ["s.duramen:4: error P013"]
+
+req CK-002 "IDs are unique"
+  decision D-013, D-018
+  text
+    The IDs of requirements MUST be unique among requirements, and so MUST those of open items
+    among open items, those of decisions among decisions, and the names of operations among
+    operations: every use after the first, in record order, MUST get T007 at its line, and an
+    example is checked against the first operation of its name. IDs of different kinds may be
+    the same: a requirement and an open item are REQ-x and OPEN-x, and a decision named
+    `REQ-A` is no requirement.
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      oracle node echo.mjs
+      op f
+        input x? json
+      req A "a"
+        example f {}
+      req A "again"
+        example f {}
+      open A "an open item may share a requirement's ID"
+        text
+          Open.
+      open B "b"
+        text
+          Open.
+      open B "b again"
+        text
+          Open.
+      decision D-1 "d"
+        source s
+      decision D-1 "d again"
+        source s
+      req C "c"
+        decision D-1
+        example f {}
+    input files."echo.mjs" from "fixtures/echo.mjs"
+    expect result.diagnostics = ["s.duramen:8: error T007", "s.duramen:16: error T007", "s.duramen:21: error T007"]
+  example check {}
+    input files."a.duramen"
+      duramen 0.1
+      spec s 1
+      oracle node echo.mjs
+      op f
+        input x? json
+      req A "a"
+        example f {}
+    input files."b.duramen"
+      duramen 0.1
+      req A "a"
+        example f {}
+      op f
+        input y? json
+    input files."echo.mjs" from "fixtures/echo.mjs"
+    expect result.diagnostics = ["b.duramen:2: error T007", "b.duramen:4: error T007"]
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      oracle node echo.mjs
+      op f
+        input x? json
+      req A "a"
+        decision REQ-A, OPEN-B
+        example f {}
+      decision REQ-A "named like a requirement"
+        source s
+      decision OPEN-B "named like an open item"
+        source s
+      open B "b"
+        text
+          Open.
+      req A "a third time"
+        example f {}
+      req A "and a third"
+        example f {}
+    input files."echo.mjs" from "fixtures/echo.mjs"
+    expect result.diagnostics = ["s.duramen:16: error T007", "s.duramen:18: error T007"]
+
+req CK-003 "Cited decisions are declared"
+  decision D-015
+  text
+    Every decision a requirement cites MUST be declared; each one that is not MUST get T008 at
+    the requirement's line, once however many times the requirement cites it.
+  example check {}
+    input files."s.duramen"
+      duramen 0.1
+      spec s 1
+      oracle node echo.mjs
+      op f
+        input x? json
+      decision D-1 "d"
+        source s
+      req A "a"
+        decision D-1 D-2, D-3
+        decision D-2
+        example f {}
+    input files."echo.mjs" from "fixtures/echo.mjs"
+    expect result.diagnostics = ["s.duramen:8: error T008", "s.duramen:8: error T008"]

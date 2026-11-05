@@ -1,0 +1,18 @@
+duramen 0.1
+
+section JU "Judging an answer"
+  text
+    The suite judges an implementation by sending each case's request line to it and comparing
+    the answer with the case. `judge` is that comparison, for one case and one answer: the
+    checks the case's example states, and the oracle's whole answer. Which response is a
+    case's answer, and the protocol cases on the stream itself, are open (OPEN-SU-001).
+
+open JU-001 "Checks of other kinds"
+  text
+    Checks of kinds other than `eq` and `approx`, which the rest of the language adds (an edge
+    pack's refusals, and texts sent in base64), and the members they carry.
+
+open JU-002 "Numbers too large for binary64 in a judge request"
+  text
+    A `judge` request that holds a JSON number too large for binary64 (such as `1e400`) in its
+    case or its answer.

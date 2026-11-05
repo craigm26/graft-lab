@@ -1,0 +1,8 @@
+duramen 0.1
+
+section CK "Checking a record"
+  text
+    These checks run on a record that was read without errors (REQ-RC-005). Most example
+    records here have an oracle, the small program shown under Files (`fixtures/echo.mjs`),
+    which answers each request with its input as the result, so that their examples run
+    cleanly and the diagnostics shown are the ones each example is about.
