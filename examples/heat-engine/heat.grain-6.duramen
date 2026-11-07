@@ -1,0 +1,346 @@
+# heat-engine, a slice: wet-bulb temperature, heat flags, the canonical operation, and the
+# request rules they need. Adapted from github.com/craigm26/regen-heat-engine at 4d99222
+# (.regenerate/SPEC.md 1.0.2 and DECISIONS.md; MIT License, Copyright (c) 2026 craigm26).
+# Slice versions: 1.0.2-slice was the duramen 0.1 restatement; 1.1.0-slice adds evidence,
+# properties, result types and static checks (duramen diff: tightening, so a new minor);
+# 1.2.0-slice pins infinite tempF in wetBulbF after blind build t07 and duramen agree (D-025).
+# Left out of the slice: work/rest, verdict and the weather cascade. REGEN.json and the budgets
+# are in, as static checks on the implementation folder (section BU).
+# The oracle is that repository's suite oracle, unchanged, behind a small driver. Two evidence
+# files, evidence/*.csv, are unchanged copies of HeatCompass/heat-engine-spec's fixtures at
+# f621520 (MIT, Copyright (c) 2026 HeatCompass), as imported by regen-heat-engine.
+
+duramen 0.2
+
+spec heat-engine 1.2.0-slice
+  title "Wet-bulb temperature and heat flags, with byte-exact audit records"
+  contract 0.2.0
+  request {"clock": "2026-05-26T17:00:00.000Z"}
+  text
+    `heat-engine` is a small calculation library for outdoor heat-stress decisions. This slice
+    covers wet-bulb temperature from air temperature and relative humidity (Stull 2011), from
+    °C or °F, and the U.S. Marine Corps heat flag (MCO 6200.1E) for a wet-bulb temperature in °F
+    or °C. Every computing operation returns its result together with an **audit record**: what
+    was computed, from which inputs and constants, under which citation, and when. Audit
+    records are compared byte for byte, so their serialized form is part of the contract.
+    "Number" means an IEEE 754 binary64 value (a JavaScript `number`, a Python `float`).
+
+oracle node oracle-driver.mjs
+  source oracle.mjs
+
+type num = number | "NaN" | "Infinity" | "-Infinity"
+type wetBulbResult = {wetBulbC: number, wetBulbF: number, clampedRhPct?: number} | null
+type flag = "white" | "green" | "yellow" | "red" | "black"
+type flagResult = {flag: flag, flagDartLabel: "low" | "moderate" | "high" | "extreme" | "critical"} | null
+type command = string | {default: string, ...}
+
+# ---------------------------------------------------------------------------------------------
+section RQ "Requests"
+
+errors
+  bad_request when the line is not a JSON object, or `id` is missing or not a string (the
+    response then has `"id": null`)
+  unknown_op when `op` is missing, not a string, or not one of the operations
+  bad_request when `input` is missing or not an object; `clock` is missing or not a string
+    where the operation needs it; a required input field is missing; or an input field has the
+    wrong JSON type (a number field holding `true` or `"80"`, for example)
+
+req IF-004 "The injected clock"
+  text
+    Every request except `canonical` carries `clock`, a UTC timestamp in the exact form
+    `YYYY-MM-DDTHH:MM:SS.sssZ` (24 characters). It is the injected clock: every `computed_at`
+    in every audit record produced by the request MUST equal it exactly. An implementation
+    never reads the wall clock for an audit.
+evidence CUT-IF-004 "Judged only through the whole answers of the operations this cut keeps"
+  source grain cut
+  kind derived
+  supports IF-004
+
+req IF-006 "Numbers in requests"
+  decision D-007
+  text
+    Numeric input fields accept either a JSON number or one of the three strings `"NaN"`,
+    `"Infinity"`, `"-Infinity"`, which stand for the corresponding non-finite values. This is
+    how invalid numeric input reaches the operations. A JSON number in a request MUST be
+    treated as a binary64 value regardless of how it is written: `20`, `20.0` and `2e1` are
+    the same input and are written identically (`20`).
+evidence CUT-IF-006 "Judged only through the whole answers of the operations this cut keeps"
+  source grain cut
+  kind derived
+  supports IF-006
+
+req IF-007 "Requests that cannot be handled"
+  decision D-019, D-024
+  text
+    A request line that cannot be handled MUST get exactly `{"id": <id>, "error": <code>}`,
+    with the code given by the numbered list under Errors, and the driver MUST then continue
+    with the next line. Invalid values are not errors: a non-finite number or an unknown flag
+    name reaches the operation, which reports it in its result.
+  example raw "{not json"
+    expect id = null
+    expect error = "bad_request"
+  example raw "[1,2]"
+    expect id = null
+    expect error = "bad_request"
+  example heatIndex {"tempC": 20}
+    expect error = "unknown_op"
+  example heatIndex
+    omit clock
+    expect error = "unknown_op"
+req IF-008 "Extra members"
+  text
+    Unknown extra members in a request or in `input` MUST be ignored.
+evidence CUT-IF-008 "Judged only through the whole answers of the operations this cut keeps"
+  source grain cut
+  kind derived
+  supports IF-008
+
+open IF-001 "Standard error"
+  text
+    What the driver writes to standard error.
+
+open IF-002 "Error text"
+  text
+    Any human-readable error text; it never appears in a response.
+
+open IF-003 "Malformed clocks"
+  text
+    Behavior for a `clock` string that is not in the exact 24-character form.
+
+open IF-005 "Streaming and odd request bytes"
+  text
+    Whether responses are written as each request line arrives or only after end of input
+    (only order and completeness are pinned); handling of request bytes that are not valid
+    UTF-8; handling of duplicate member names in a request object.
+
+# ---------------------------------------------------------------------------------------------
+section CJ "Canonical JSON"
+  text
+    Audit records, result summaries and the `canonical` operation write numbers and JSON by the
+    edges in the Edges section: number text (number-text/ecmascript), fixed-point text
+    (fixed-text/ecmascript) and canonical JSON (json/sorted-utf16).
+
+edge number-text/ecmascript via canonical value
+  decision D-002
+edge fixed-text/ecmascript
+  decision D-002
+edge json/sorted-utf16 via canonical value
+  decision D-021
+
+op canonical
+  input value any
+  returns string
+  result the canonical JSON text of `value`, as a string
+  request {}
+
+req CJ-005 "The canonical operation"
+  decision D-017
+  text
+    `canonical` takes `input.value`, any JSON value, `null` included, and MUST respond
+    `{"id": <id>, "result": <string>}`, where the string is the canonical JSON text of the
+    value (edge json/sorted-utf16). It has no `audit` member and needs no `clock`. JSON numbers
+    in `value` are binary64 values (REQ-IF-006); the special strings of REQ-IF-006 are **not**
+    interpreted here: they are ordinary strings. Without a `value` member the request is a
+    `bad_request`.
+  example canonical {"value": {"b": [1, 2.50, 1e21], "a": null}}
+    expect result = "{\"a\":null,\"b\":[1,2.5,1e+21]}"
+  example canonical {"value": {"y": "Infinity", "x": "NaN"}}
+    expect result = "{\"x\":\"NaN\",\"y\":\"Infinity\"}"
+  example canonical {"value": null}
+    expect result = "null"
+  example canonical {}
+    expect error = "bad_request"
+
+property CJ-P1 "Canonical text is a fixed point and reads back as the value"
+  supports CJ-005
+  for v in json
+  call a = canonical {"value": v}
+  call b = canonical {"value": parse(a.result)}
+  expect b.result == a.result
+  expect parse(a.result) == v
+
+open CJ-001 "Numbers outside binary64"
+  text
+    JSON numbers outside the binary64 range (e.g. `1e400`), anywhere in a request: their
+    canonical text in `canonical`, and how operations treat them.
+
+# ---------------------------------------------------------------------------------------------
+section AU "Audit records"
+
+req AU-001 "Audit members"
+  decision D-001
+  text
+    Every audit record is a JSON object with these members, always present:
+
+    | member | value |
+    |---|---|
+    | `spec_version` | the string `"0.2.0"` |
+    | `function` | the operation's function name (given per operation) |
+    | `inputs` | an object of the inputs, as each operation specifies |
+    | `constants` | an object mapping constant names to numbers, as each operation specifies (possibly empty) |
+    | `citation` | a fixed string per operation |
+    | `result_summary` | a one-line human-readable string, as each operation specifies |
+    | `computed_at` | the request's `clock` (REQ-IF-004) |
+
+    `flagC` adds `children` (REQ-FL-005). No other members appear. In a response, `audit` is
+    this record written as canonical JSON (edge json/sorted-utf16) and carried as a JSON string.
+  decision D-003
+evidence CUT-AU-001 "Judged only through the whole answers of the operations this cut keeps"
+  source grain cut
+  kind derived
+  supports AU-001
+
+# ---------------------------------------------------------------------------------------------
+section WB "Wet-bulb temperature (Stull 2011)"
+  text
+    Primary source: Stull, R. (2011), *Wet-Bulb Temperature from Relative Humidity and Air
+    Temperature*, J. Appl. Meteor. Climatol. 50(11):2267–2269, DOI 10.1175/JAMC-D-11-0143.1.
+
+open WB-001 "Overflow"
+  text
+    Results when the computation overflows or loses all precision (inputs of enormous
+    magnitude); the result and summary for such inputs are unspecified.
+
+open WB-002 "Extra precision"
+  text
+    Results more precise than the stated tolerance.
+
+# ---------------------------------------------------------------------------------------------
+section FL "Heat flags (MCO 6200.1E)"
+  text
+    Primary source: U.S. Marine Corps Order 6200.1E, Marine Corps Heat Stress Program.
+
+open FL-001 "Overflow in the °C path"
+  text
+    `flagC` for a finite `wetBulbC` whose °F conversion overflows to a non-finite value (only
+    reachable near ±1.8e308).
+
+# ---------------------------------------------------------------------------------------------
+section BU "The implementation folder"
+  text
+    These requirements are checked on the implementation folder, not through the driver.
+
+# ---------------------------------------------------------------------------------------------
+decision D-001 "The whole audit record is pinned, byte for byte"
+  source extraction
+  text
+    The earlier implementation's main cross-language guarantee was byte-equal serialized
+    audit records, including the human-readable `result_summary`. Pinning all of it makes the
+    spec nearly as detailed as the code for summaries and number formatting. Decision: pin
+    every audit member, including `result_summary`, number text, fixed-point text and
+    canonical JSON (the three edges), and member presence rules; leave error message text,
+    standard error and library shape open. Why: the audit record is what a downstream consumer
+    stores and compares; if two implementations may differ in it, byte comparison stops being
+    useful.
+  rejected "Pin only the structured members and compare result_summary by pattern, as some earlier tests did: the earlier cross-language check compared whole records."
+
+decision D-002 "Number text follows ECMAScript, not the host language"
+  source extraction
+  text
+    Canonical JSON and summaries write numbers as text. The earlier implementation used
+    JavaScript's `String(n)` and `toFixed`. Other languages differ: Python's `repr` writes
+    `1e-07` and `1e+20` where JavaScript writes `1e-7` and `100000000000000000000`; Python's
+    `'%.1f'` rounds exact ties to even (`20.25` → `20.2`) where `toFixed` rounds them up
+    (`20.3`). Decision: the edges number-text/ecmascript and fixed-text/ecmascript. Why: byte
+    equality across languages needs one rule; the earlier fixtures were produced with this one.
+  rejected "Fixed significant digits everywhere: changes all existing expected bytes."
+
+decision D-003 "The emitted contract version is 0.2.0"
+  source extraction
+  text
+    Audit records carry `spec_version`, the version of the audit and behavior contract. The
+    earlier implementation emitted `0.1.1`, and this spec changes the contract in places, so
+    claiming `0.1.1` would be false. This is a different number from the document's own
+    version, which tracks the wording. Decision: emit `"0.2.0"` (REQ-AU-001).
+  rejected "Keep 0.1.1: dishonest about the changes."
+
+decision D-007 "Non-finite inputs are written as strings in audits"
+  source extraction
+  text
+    The earlier TypeScript wrote `NaN` inputs as the string `"NaN"` but let `Infinity`
+    through, which its serializer then wrote as `null`; the other earlier implementation wrote
+    `"Infinity"`. Decision: `"NaN"`, `"Infinity"`, `"-Infinity"` (REQ-AU-002); requests use
+    the same three strings (REQ-IF-006), since JSON has no non-finite numbers. Why: symmetric,
+    lossless, and matches one of the two earlier behaviors.
+  rejected "null: loses which value it was."
+
+decision D-009 "RH is clamped to [5, 100], not [5, 99]"
+  source extraction
+  text
+    Stull's stated validity range is RH 5–99 %; the earlier input schema said implementations
+    "MUST clamp to [5, 99]"; the earlier code clamped to [5, 100], and a test asserts
+    `RH=120 → 100`. Decision: clamp to [5, 100] (REQ-WB-001); RH in (99, 100] computes without
+    a marker. Why: code and tests agreed, and 100 % is a real humidity.
+  rejected "Clamp to 99: contradicts the earlier tests."
+  rejected "Mark RH above 99 as out of range: new behavior nobody asked for."
+
+decision D-010 "Flag bands are in °F, and the °C path uses one exact expression"
+  source extraction, primary source
+  text
+    MCO 6200.1E defines the bands in °F with inclusive lower bounds. The °C path converts
+    first. Floating-point error can move a value across a boundary: for `26.66666666666666` °C,
+    `(c*9)/5+32` gives `79.99999999999999` (white) but `c*1.8+32` gives `80` (green). Decision:
+    REQ-FL-004 pins `(wetBulbC * 9) / 5 + 32`; REQ-WB-005 pins `((tempF - 32) * 5) / 9`. Why:
+    the order of operations is observable at the boundaries.
+  rejected "A tolerance at boundaries: makes flags ambiguous."
+
+decision D-017 "canonical returns no audit"
+  source extraction
+  text
+    Every computing operation returns a result and an audit. The canonical serializer is a
+    utility, exposed so the suite can test number and string rules directly. Decision:
+    `canonical` responds with `result` only (REQ-CJ-005). Why: an audit of the serializer would
+    itself need serializing; nothing consumes it.
+  rejected "A trivial audit: noise."
+
+decision D-018 "Wet-bulb tolerance is ±1e-5 °C"
+  source extraction
+  text
+    The imported wet-bulb fixtures carry a tolerance of 0.00001 and expected values to six
+    decimals, generated by evaluating the formula in double precision. Stull's own claimed
+    accuracy is about ±0.65 °C against observations; the tolerance here is about agreeing on
+    the formula, not about meteorology. Why: any faithful double-precision evaluation passes; a
+    wrong constant does not.
+  rejected "A looser tolerance: would hide a mistyped constant."
+
+decision D-019 "Malformed requests are errors, invalid values are results"
+  source extraction
+  text
+    The earlier library returned `invalid_input` audits for non-finite numbers and unknown
+    flag names, which are values a caller can legitimately pass. Missing fields and wrong JSON
+    types have no library equivalent once a process boundary exists. Decision: missing fields
+    and wrong JSON types are `bad_request`; non-finite numbers and unknown flag names are
+    `invalid_input` results. Why: keeps the earlier invalid-input audits intact while giving
+    the driver a clean failure for garbage.
+  rejected "Turn everything into invalid_input audits: which field names would the audit carry for a missing member?"
+
+decision D-021 "Object keys sort by UTF-16 code units"
+  source extraction
+  text
+    The earlier serializers sorted keys with JavaScript's default comparison, which compares
+    UTF-16 code units. That differs from code-point order only for keys mixing characters above
+    U+FFFF with characters in U+E000–U+FFFF. All keys in audit records are ASCII, so it matters
+    only for `canonical`. Decision: the edge json/sorted-utf16. Why: one rule, matching the
+    earlier output.
+  rejected "Code-point order."
+
+decision D-024 "Error checks are a numbered order"
+  source r02
+  text
+    The prose spec once said checks happen "in the order the table lists them" (the table
+    listed `bad_request` first) and, in the same sentence, "`unknown_op` before input checks".
+    The r02 builder chose the intended order and noted the wording was loose. Decision: the
+    order is the numbered Errors list, declared once; `duramen check` rejects a requirement that
+    restates it (T005).
+  rejected "Keep a table and drop the first clause: still easy to misread."
+
+decision D-025 "Infinite °F converts by the same expression"
+  source blind build t07 (choice C-7) and duramen agree, 2026-10-08
+  text
+    REQ-WB-005 said that "a non-finite tempF gives a non-finite tempC". The t07 builder read
+    that as "always NaN" and wrote `"NaN"` in the audit for an infinite `tempF`, where the exact
+    expression gives an infinity; no case checked it, and `duramen agree` found the difference
+    on 199 of 400 generated `wetBulbF` requests. Decision: the text says that the expression
+    applies to non-finite values too, and two examples pin the infinities. Why: the expression
+    was already the rule; the summary sentence invited the shortcut.
+  rejected "Treat every non-finite tempF as NaN: loses the sign the input had, and contradicts the exact expression."

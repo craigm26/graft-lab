@@ -1,0 +1,31 @@
+# The grain measurement's composite record (Graft roadmap 3.3): heat-engine, jsonpath and rcan-gate from this
+# repository's examples, put together by Graft's scripts/lab/grain-composite.ts. Ids carry a prefix per part (H, J, G);
+# the implementation-folder section is jsonpath's, with the three size budgets summed. The oracle hands each request to
+# the part's own oracle driver.
+
+duramen 0.2
+
+spec grain-composite 1.0.0
+  title "Three programs behind one driver: heat-stress calculations, JSONPath queries, and a robot command gate"
+  text
+    One program with the operations of three: `wetBulb`, `wetBulbF`, `flagF`, `flagC` and `canonical` (heat-stress
+    calculations with audit records), `query` (JSONPath queries, RFC 9535) and `decide` (a gate that admits or refuses
+    robot commands). Each section names the part it belongs to in its overview; the parts share the request rules of
+    the driver protocol and one implementation folder, and are otherwise independent. A term a part defines in its
+    overview means that in that part's sections.
+
+oracle node driver.mjs
+  source driver.mjs
+
+errors
+  bad_request when the line is not a JSON object, or `id` is missing or not a string (the
+    response then has `"id": null`)
+  unknown_op when `op` is missing, not a string, or not one of the operations
+  bad_request when `input` is missing or not an object; `clock` is missing or not a string
+    where the operation needs it; a required input field is missing; or an input field has the
+    wrong JSON type (a number field holding `true` or `"80"`, for example)
+  bad_request when `input` is missing or not an object, `input.query` is missing or not a
+    string, or `input.document` is missing
+  invalid_query when `input.query` is not a well-formed and valid JSONPath query
+  bad_request when `input` is missing or not an object, or `input.state` or `input.command` is
+    missing or not well formed (REQ-GRQ-002, REQ-GRQ-003)
