@@ -1,7 +1,7 @@
 # heat-engine: specification
 
 - Program: `heat-engine`
-- Document version: 1.5.0-slice
+- Document version: 1.6.0-slice
 - Contract version: `0.2.0`
 - Generated from `heat.duramen` by duramen 0.3.0. Edit the source, not this file.
 
@@ -216,6 +216,18 @@ Examples:
 Examples:
 - the request line `{"id":"extra","op":"flagF","input":{"wetBulbF":86,"note":"x"},"clock":"2026-05-26T17:00:00.000Z","trace":true}` ⟶ `result` = `{"flag":"yellow","flagDartLabel":"high"}`
 
+**REQ-IF-009.** *A byte order mark is not skipped.*
+
+A request line that starts with U+FEFF (the byte order mark, bytes EF BB BF in UTF-8), the
+first line of input or any other, is not a JSON object: the mark is part of the line, not
+white space, and is not skipped. The line MUST get `{"id": null, "error": "bad_request"}`,
+as any other line that is not JSON does.
+
+Decisions: D-019, D-029.
+
+Examples:
+- the request line `﻿{"id":"bom","op":"flagF","clock":"1999-12-31T23:59:59.999Z","input":{"wetBulbF":70}}` ⟶ `id` = `null`; `error` = `"bad_request"`
+
 **OPEN-IF-001.** *Standard error.* What the driver writes to standard error. (Open: implementations may differ; never tested.)
 
 **OPEN-IF-002.** *Error text.* Any human-readable error text; it never appears in a response. (Open: implementations may differ; never tested.)
@@ -224,7 +236,7 @@ Examples:
 
 **OPEN-IF-005.** *Streaming and odd request bytes.* Whether responses are written as each request line arrives or only after end of input
 (only order and completeness are pinned); handling of request bytes that are not valid
-UTF-8; handling of duplicate member names in a request object. (Open: implementations may differ; never tested.)
+UTF-8 (a byte order mark is valid UTF-8: REQ-IF-009); handling of duplicate member names in a request object. (Open: implementations may differ; never tested.)
 
 ---
 
@@ -317,7 +329,7 @@ Temperature*, J. Appl. Meteor. Climatol. 50(11):2267–2269, DOI 10.1175/JAMC-D-
 
 **REQ-WB-001.** *Wet-bulb temperature.*
 
-For finite `tempC` (T, °C) and `rhPercent`, let `RH` be `rhPercent` clamped to the closed
+For finite `tempC` (T, °C) from -273.15 to 1000 (REQ-WB-006) and finite `rhPercent`, let `RH` be `rhPercent` clamped to the closed
 range [5, 100] (below 5 becomes 5, above 100 becomes 100). Compute, in binary64,
 evaluating exactly these terms in this order:
 
@@ -403,7 +415,10 @@ where the formula rises.
   - then `b.result.wetBulbC > a.result.wetBulbC`
 - The suite checks this on 100 generated cases.
 
-**REQ-WB-002.** *No clamping of temperature.* Temperatures outside [-20, 50] °C still compute a result: `tempC` is never clamped.
+**REQ-WB-002.** *No clamping of temperature.*
+
+Temperatures outside [-20, 50] °C, up to the bounds of REQ-WB-006, still compute a result:
+`tempC` is never clamped.
 
 | tempC | rhPercent | result.wetBulbC |
 |---|---|---|
@@ -497,6 +512,35 @@ Decisions: D-007, D-019.
 
 (Rows are `wetBulb` requests. An empty cell states nothing.)
 
+**REQ-WB-006.** *Temperatures below absolute zero or above 1000 °C.*
+
+For a finite `tempC` below -273.15 (absolute zero) or above 1000, with a finite
+`rhPercent`, nothing is computed: the result MUST be `null`, and the audit MUST have
+`function` and `citation` as in REQ-WB-003, `inputs` `{"tempC": tempC, "rhPercent":
+rhPercent}` with the values as given, `constants` `{"temp_min_c": -273.15, "temp_max_c":
+1000}`, and `result_summary` `out_of_range:tempC`. The bounds themselves compute
+(REQ-WB-001). The comparison is on the binary64 value as given; for `wetBulbF` it is on the
+converted `tempC` (REQ-WB-005). A non-finite input is REQ-WB-004's, whatever the other
+value. `rhPercent` has no bound of its own: it is clamped (REQ-WB-001).
+
+Decisions: D-019, D-030.
+
+Examples:
+- `wetBulb {"tempC": 1.4831838650267556e+308, "rhPercent": 5e-324}` ⟶ `audit.inputs` = `{"rhPercent":5e-324,"tempC":1.4831838650267556e+308}`; `audit.constants` = `{"temp_max_c":1000,"temp_min_c":-273.15}`
+- `wetBulb {"tempC": 1000, "rhPercent": 50}` ⟶ `result.wetBulbC` ≈ `856.09192` (± 0.00001); `audit.result_summary` = `"T=1000.0°C RH=50% (out_of_validity_range) → Tw=856.09°C"`
+- `wetBulb {"tempC": -273.15, "rhPercent": 50}` ⟶ `result.wetBulbC` ≈ `-241.40662` (± 0.00001); `audit.result_summary` = `"T=-273.1°C RH=50% (out_of_validity_range) → Tw=-241.41°C"`
+- `wetBulbF {"tempF": 1e300, "rhPercent": 50}` ⟶ `result` = `null`; `audit.inputs` = `{"rhPercent":50,"tempC":5.555555555555556e+299}`; `audit.result_summary` = `"out_of_range:tempC"`
+
+| tempC | rhPercent | result | audit.result_summary |
+|---|---|---|---|
+| `1.4831838650267556e+308` | `5e-324` | `null` | `"out_of_range:tempC"` |
+| `1000.0000000000001` | `50` | `null` | `"out_of_range:tempC"` |
+| `-273.15000000000003` | `50` | `null` | `"out_of_range:tempC"` |
+| `-1.7976931348623157e+308` | `50` | `null` | `"out_of_range:tempC"` |
+| `1e21` | `"NaN"` | `null` | `"invalid_input:rhPercent"` |
+
+(Rows are `wetBulb` requests. An empty cell states nothing.)
+
 **REQ-WB-005.** *Wet-bulb from °F.*
 
 `wetBulbF` takes `tempF` and `rhPercent`, computes `tempC = ((tempF - 32) * 5) / 9` in
@@ -523,9 +567,6 @@ Examples:
   - `b` is the response to `wetBulb {"tempC": (f - 32) * 5 / 9, "rhPercent": rh}`
   - then `a.result == b.result` and `a.audit == b.audit`
 - The suite checks this on 100 generated cases. Decisions: D-010.
-
-**OPEN-WB-001.** *Overflow.* Results when the computation overflows or loses all precision (inputs of enormous
-magnitude); the result and summary for such inputs are unspecified. (Open: implementations may differ; never tested.)
 
 **OPEN-WB-002.** *Extra precision.* Results more precise than the stated tolerance. (Open: implementations may differ; never tested.)
 

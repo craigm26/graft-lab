@@ -119,7 +119,7 @@ Rejected:
 ## D-019: Malformed requests are errors, invalid values are results
 
 - Source: extraction
-- Cited by: REQ-IF-007, REQ-WB-004
+- Cited by: REQ-IF-007, REQ-IF-009, REQ-WB-004, REQ-WB-006
 
 The earlier library returned `invalid_input` audits for non-finite numbers and unknown
 flag names, which are values a caller can legitimately pass. Missing fields and wrong JSON
@@ -225,3 +225,48 @@ Why: Go, TypeScript and Rust cover most new services; the record should admit al
 
 Rejected:
 - Allow modules from a vendored folder: the builder has no network to fetch them, and a vendored tree is code the record never judged.
+
+## D-029: A byte order mark makes a line bad_request
+
+- Source: Graft reproducibility rounds, 2026-11-05 round 1 and 2026-11-08 rounds 1 and 3 (raw request repro:raw:16)
+- Cited by: REQ-IF-009
+
+Nothing said what a request line that starts with U+FEFF gets. Graft's raw pack sends a
+valid `flagF` request with the mark in front, alone on standard input, and three blind
+builds answered it two ways in three of the rounds scored; duramen's driver protocol leaves
+white-space-only lines open but says nothing about a mark before a request, so the record
+has to. RFC 8259 lets a parser ignore a mark and forbids sending one; JSON's white space
+does not include it. Decision: the mark is part of the line, so the line is not a JSON
+object and gets `bad_request` with `id` null (REQ-IF-009). Why: the Errors list already
+says a line that is not a JSON object is `bad_request`, D-019 makes malformed requests
+errors, and the oracle answered so already (`JSON.parse` rejects the mark and Node's UTF-8
+decoding of standard input keeps it); every language's strict JSON parser does the same
+unless the builder adds a step to strip it.
+
+Rejected:
+- Strip a leading mark and answer the request: adds a step to every driver that strict parsers do not take, and the Errors list would need an exception to say which lines are JSON.
+
+## D-030: wetBulb computes only from -273.15 to 1000 °C
+
+- Source: Graft reproducibility round, 2026-11-08 round 3 (generated request agree:wetBulb#9)
+- Cited by: REQ-WB-006
+
+OPEN-WB-001 left results for inputs of enormous magnitude unspecified. Three builds split
+on `wetBulb` with `tempC` 1.4831838650267556e+308: `wetBulbC` is finite but
+`(wetBulbC * 9) / 5 + 32` overflows, and the oracle could not answer (a non-finite number
+in a result). Well before overflow the formula stops meaning anything: from about 1e11 °C
+the last-place differences between platforms' `atan` exceed the ±1e-5 tolerance, and the
+summary's two decimals can differ before that. Decision: `tempC` from -273.15 (absolute zero) to
+1000, inclusive, computes as before; outside, the result is `null` and the summary
+`out_of_range:tempC`, with the bounds as constants (REQ-WB-006). OPEN-WB-001 is removed:
+within the bounds nothing overflows. `wetBulbF` follows through REQ-WB-005. Why: D-019
+makes a value a caller can pass a result, not an error, and REQ-WB-004 already reports an
+unusable temperature as a `null` result with its reason in the summary; a new summary word
+says which reason. Absolute zero is a physical bound; 1000 °C is far above any air
+temperature this library serves and far below where the formula loses precision, and every
+existing example, evidence row and property stays inside it.
+
+Rejected:
+- A `bad_request` or new error code: the Errors list and D-019 keep errors for malformed requests, and a finite number is a valid value.
+- `invalid_input:tempC`: D-026 rejected reporting a finite input as invalid, and a caller should be able to tell a NaN from a temperature out of range.
+- Keep computing and pin overflow to null: results between about 1e10 and the overflow would still differ by platform.

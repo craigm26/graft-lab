@@ -1,6 +1,7 @@
 // Copied from github.com/craigm26/regen-heat-engine at 4d99222, .regenerate/suite/oracle.mjs
 // (MIT License, Copyright (c) 2026 craigm26). Unchanged below this header, except flagC's overflow
-// path, which heat.duramen 1.3.0-slice pins (D-026).
+// path, which heat.duramen 1.3.0-slice pins (D-026), and wetBulb's temperature bounds, which
+// 1.6.0-slice pins (D-030).
 
 // The spec restated as expectations. Written from SPEC.md, not from any implementation.
 // Each function returns { result, audit } where audit is a plain object; canon() turns it
@@ -56,6 +57,10 @@ export function wetBulb(tempC, rhPercent, clock) {
   if (!Number.isFinite(tempC) || !Number.isFinite(rhPercent)) {
     const bad = !Number.isFinite(tempC) ? 'tempC' : 'rhPercent';
     return { result: null, audit: audit('calculateWetBulb', { tempC: enc(tempC), rhPercent: enc(rhPercent) }, {}, WB_CITE, `invalid_input:${bad}`, clock) };
+  }
+  // D-030: a finite tempC below absolute zero or above 1000 °C computes nothing.
+  if (tempC < -273.15 || tempC > 1000) {
+    return { result: null, audit: audit('calculateWetBulb', { tempC, rhPercent }, { temp_min_c: -273.15, temp_max_c: 1000 }, WB_CITE, 'out_of_range:tempC', clock) };
   }
   const RH = rhPercent < 5 ? 5 : rhPercent > 100 ? 100 : rhPercent;
   const clamped = RH !== rhPercent;
