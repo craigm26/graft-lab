@@ -1,0 +1,398 @@
+# x402-jcs: JSON Canonicalization (RFC 8785), with the ledger's strict statement form.
+# Extracted by hand (graftfork roadmap 3.1, the free first step) from
+# github.com/craigm26/x402-solidarity at d6653c7, src/solidarity/jcs.ts (79 lines; Apache-2.0,
+# Copyright craigm26). Written from what the module is meant to do: its doc comments, its
+# callers (src/solidarity/ledger.ts, policy.ts, facilitator.ts), its tests' stated intent, and
+# RFC 8785 and RFC 7493, which it cites. No expected value here was copied from running it.
+# Every requirement, decision, property and example is a claim a person has not yet accepted:
+# jcs.graft (Graft's claims block, roadmap 3.0) marks each one inferred, since duramen 0.3.0
+# gives a status to decisions only; CLAIMS.md says where each came from.
+# The oracle (oracle.mjs) is written from RFC 8785, not ported from jcs.ts.
+
+duramen 0.2
+
+spec x402-jcs 0.1.0-extracted
+  title "JSON Canonicalization Scheme (RFC 8785) with a strict statement form"
+  text
+    `x402-jcs` writes a JSON value as its one canonical text under RFC 8785, the JSON
+    Canonicalization Scheme, so that two parties that hold the same value produce the same bytes
+    to hash or sign. It has a strict mode, the form of the solidarity ledger's signed statements,
+    which accepts only strings, non-negative integers below 2^53, arrays, objects and null. It
+    also answers whether a given text is already exactly the canonical form of the value it
+    holds.
+
+    "Number" means an IEEE 754 binary64 value. A JSON number in a request is read as the binary64
+    value nearest to it, however it is written.
+
+oracle node oracle-driver.mjs
+  source oracle.mjs, oracle-driver.mjs
+
+edge json/rfc8785 via canonicalize value
+  decision D-001
+edge number-text/ecmascript via canonicalize value
+  decision D-001
+
+# ---------------------------------------------------------------------------------------------
+section RQ "Requests"
+
+errors
+  bad_request when the line is not a JSON object, or `id` is missing or not a string (the
+    response then has `"id": null`)
+  unknown_op when `op` is missing, not a string, or not one of the operations
+  bad_request when `input` is missing or not an object, a required input field is missing, or
+    an input field has the wrong JSON type (`strict` holding `"yes"`, for example)
+  no_canonical_form when the value has no canonical form (REQ-JC-003, REQ-JC-008)
+
+req IF-001 "Requests that cannot be handled"
+  decision D-006
+  text
+    A request line that cannot be handled MUST get exactly `{"id": <id>, "error": <code>}`, with
+    the code given by the numbered list under Errors, and the driver MUST then continue with the
+    next line.
+  example raw "{not json"
+    expect id = null
+    expect error = "bad_request"
+  example canonicalize {"value": 1}
+    omit id
+    expect id = null
+    expect error = "bad_request"
+  example canonicalise {"value": 1}
+    expect error = "unknown_op"
+  example canonicalize
+    expect error = "bad_request"
+  example canonicalize {}
+    expect error = "bad_request"
+  example isCanonical {"text": 1}
+    expect error = "bad_request"
+  example canonicalize {"value": 1, "strict": "yes"}
+    expect error = "bad_request"
+
+req IF-002 "Extra members"
+  text
+    Unknown extra members in a request or in `input` MUST be ignored.
+  example raw '{"id":"extra","op":"canonicalize","input":{"value":[1],"note":"x"},"trace":true}'
+    expect result = "[1]"
+
+open IF-003 "Error text and standard error"
+  text
+    Any human-readable error text, and what the driver writes to standard error.
+
+open IF-004 "Repeated member names in a request"
+  text
+    Which member wins when a request object, or a `value` inside one, repeats a member name.
+    I-JSON forbids repeated names; the library receives values that are already parsed.
+
+# ---------------------------------------------------------------------------------------------
+section JC "Canonical text"
+  text
+    RFC 8785 section 3.2: the canonical text has no whitespace outside strings, writes literals,
+    strings and numbers as ECMAScript's JSON.stringify does, and orders object members by name.
+
+op canonicalize
+  input value any, strict? boolean
+  returns string
+  result the canonical text of `value`, as a string; with `strict` true, the statement form
+
+op canonicalBytes
+  input value any, strict? boolean
+  returns string matching "([0-9a-f][0-9a-f])*"
+  result the UTF-8 bytes of the canonical text of `value`, as lowercase hex, two digits a byte
+
+op isCanonical
+  input text string, strict? boolean
+  returns boolean
+  result whether `text` is exactly the canonical text of the JSON value it holds
+
+req JC-001 "Literals"
+  decision D-001
+  text
+    `null`, `true` and `false` MUST be written as those words.
+  example canonicalize {"value": null}
+    expect result = "null"
+  example canonicalize {"value": [true, false, null]}
+    expect result = "[true,false,null]"
+
+req JC-002 "Strings"
+  decision D-001
+  text
+    A string MUST be written as `"`, then each UTF-16 code unit as follows, then `"`: `"` and
+    `\` with a backslash before them; U+0008, U+0009, U+000A, U+000C and U+000D as `\b`, `\t`,
+    `\n`, `\f` and `\r`; any other code unit below U+0020 as `\u` and four lowercase hex digits;
+    everything else, including `/`, U+007F, U+2028 and characters outside the Basic
+    Multilingual Plane, as itself.
+  example canonicalize {"value": "\u0008\u0009\u000a\u000c\u000d"}
+    expect result = "\"\\b\\t\\n\\f\\r\""
+  example canonicalize {"value": "\u0000\u000b\u001F"}
+    expect result = "\"\\u0000\\u000b\\u001f\""
+  example canonicalize {"value": "a\"b\\c\/d"}
+    expect result = "\"a\\\"b\\\\c/d\""
+  example canonicalize {"value": "\u007f\u2028\u00e9\u20ac\ud83d\ude00"}
+    expect result = "\"\u007f\u2028\u00e9\u20ac\ud83d\ude00\""
+
+req JC-003 "Unpaired surrogates have no canonical form"
+  decision D-002
+  text
+    A value MUST be refused with `no_canonical_form` when any string in it, a member name
+    included, holds a surrogate code unit that is not part of a valid pair (a high surrogate
+    followed by a low one). A valid pair is written as itself.
+  example canonicalize {"value": "\ud800"}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": "x\udc00"}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": "\ude00\ud83d"}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": ["ok", {"\udc00": 1}]}
+    expect error = "no_canonical_form"
+  example canonicalBytes {"value": "\ud83d"}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": "\ud83d\ude00"}
+    expect result = "\"\ud83d\ude00\""
+
+req JC-004 "Numbers"
+  decision D-001
+  text
+    A number MUST be written as ECMAScript's `Number::toString` writes it (edge
+    number-text/ecmascript), whatever spelling the request used; `-0` is written `0`.
+  example canonicalize {"value": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001]}
+    expect result = "[333333333.3333333,1e+30,4.5,0.002,1e-27]"
+  example canonicalize {"value": [100, 1e2, 1.0e2, 100.000]}
+    expect result = "[100,100,100,100]"
+  example canonicalize {"value": -0}
+    expect result = "0"
+  example canonicalize {"value": [1e20, 1e21, 0.000001, 1e-7, -1.5]}
+    expect result = "[100000000000000000000,1e+21,0.000001,1e-7,-1.5]"
+  example canonicalize {"value": 9007199254740993}
+    expect result = "9007199254740992"
+
+req JC-005 "Arrays"
+  decision D-001
+  text
+    An array MUST be written as `[`, its elements' canonical texts in their order separated by
+    `,`, then `]`, with no whitespace.
+  example canonicalize {"value": [3, 1, 2, [], [{}], ""]}
+    expect result = "[3,1,2,[],[{}],\"\"]"
+
+req JC-006 "Objects"
+  decision D-001
+  text
+    An object MUST be written as `{`, its members separated by `,`, then `}`, each member as the
+    name's string text, `:`, and the value's canonical text, with no whitespace. Members MUST be
+    in ascending order of their names compared as sequences of UTF-16 code units (a shorter name
+    that is a prefix of a longer one comes first). Nested objects are ordered the same way.
+  example canonicalize {"value": {"b": 1, "a": {"d": 2, "c": [3]}}}
+    expect result = "{\"a\":{\"c\":[3],\"d\":2},\"b\":1}"
+  example canonicalize {"value": {"ab": 1, "a": 2, "": 3, "B": 4}}
+    expect result = "{\"\":3,\"B\":4,\"a\":2,\"ab\":1}"
+  example canonicalize {"value": {"\u20ac": "Euro Sign", "\r": "Carriage Return", "\ufb33": "Hebrew Letter Dalet With Dagesh", "1": "One", "\ud83d\ude00": "Emoji: Grinning Face", "\u0080": "Control", "\u00f6": "Latin Small Letter O With Diaeresis"}}
+    expect result = "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\u0080\":\"Control\",\"\u00f6\":\"Latin Small Letter O With Diaeresis\",\"\u20ac\":\"Euro Sign\",\"\ud83d\ude00\":\"Emoji: Grinning Face\",\"\ufb33\":\"Hebrew Letter Dalet With Dagesh\"}"
+  example canonicalize {"value": {"__proto__": 1, "a": 2}}
+    expect result = "{\"__proto__\":1,\"a\":2}"
+  example canonicalize {"value": {"\\": 1, "\"": 2}}
+    expect result = "{\"\\\"\":2,\"\\\\\":1}"
+
+req JC-007 "Bytes"
+  decision D-005
+  text
+    `canonicalBytes` MUST answer the UTF-8 encoding (RFC 8785 section 3.2.4) of the text that
+    `canonicalize` gives for the same input, as lowercase hex, two digits a byte. A valid
+    surrogate pair is one character, encoded in four bytes.
+  example canonicalBytes {"value": "\u20ac"}
+    expect result = "22e282ac22"
+  example canonicalBytes {"value": {"\ud83d\ude00": 1, "\u00e9": 2}}
+    expect result = "7b22c3a9223a322c22f09f9880223a317d"
+  example canonicalBytes {"value": {"numbers": [333333333.33333329, 1E30, 4.50, 2e-3, 0.000000000000000000000000001], "string": "\u20ac$\u000F\u000aA'\u0042\u0022\u005c\\\"\/", "literals": [null, true, false]}}
+    expect result = "7b226c69746572616c73223a5b6e756c6c2c747275652c66616c73655d2c226e756d62657273223a5b3333333333333333332e333333333333332c31652b33302c342e352c302e3030322c31652d32375d2c22737472696e67223a22e282ac245c75303030665c6e4127425c225c5c5c5c5c222f227d"
+
+req JC-008 "The strict statement form"
+  decision D-003, D-004
+  text
+    With `strict` true, a value MUST be refused with `no_canonical_form` when it holds a boolean,
+    or a number that is not an integer from 0 to 2^53 − 1 (9007199254740991) inclusive. Every
+    other value is written exactly as without `strict`. `strict` absent means false.
+  example canonicalize {"value": {"b": 9007199254740991, "a": [null, "x"]}, "strict": true}
+    expect result = "{\"a\":[null,\"x\"],\"b\":9007199254740991}"
+  example canonicalize {"value": 1.5, "strict": true}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": 1.5}
+    expect result = "1.5"
+  example canonicalize {"value": 9007199254740992, "strict": true}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": -1, "strict": true}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": {"a": [false]}, "strict": true}
+    expect error = "no_canonical_form"
+  example canonicalBytes {"value": true, "strict": true}
+    expect error = "no_canonical_form"
+  example canonicalize {"value": [0, 1.0, 1e2], "strict": true}
+    expect result = "[0,1,100]"
+  example canonicalize {"value": -0, "strict": true}
+    expect result = "0"
+
+req JC-009 "Recognising canonical text"
+  decision D-003
+  text
+    `isCanonical` MUST answer true exactly when `text` is one JSON text whose value has a
+    canonical form (in the strict form when `strict` is true) and `text` equals that canonical
+    form character for character. Text that is not JSON, that has whitespace outside strings or
+    anything around the value, or that repeats a member name, is not canonical.
+  table isCanonical
+    | text                    | strict | result |
+    | "{\"a\":1,\"b\":2}"     |        | true   |
+    | "{\"b\":2,\"a\":1}"     |        | false  |
+    | "{\"a\": 1}"            |        | false  |
+    | " {\"a\":1}"            |        | false  |
+    | "{\"a\":1}\n"           |        | false  |
+    | "{\"a\":1.0}"           |        | false  |
+    | "{\"a\":\"\\u0041\"}"   |        | false  |
+    | "\"\\u001f\""           |        | true   |
+    | "\"\\u001F\""           |        | false  |
+    | "\"\\/\""               |        | false  |
+    | "\"/\""                 |        | true   |
+    | "\"\\ud800\""           |        | false  |
+    | "1e+21"                 |        | true   |
+    | "1E+21"                 |        | false  |
+    | "1e21"                  |        | false  |
+    | "-0"                    |        | false  |
+    | "0"                     |        | true   |
+    | "null"                  |        | true   |
+    | ""                      |        | false  |
+    | "nul"                   |        | false  |
+    | "{\"a\":1,\"a\":1}"     |        | false  |
+    | "{\"\\\\\":1}"          |        | true   |
+    | "{\"\":0,\"\\\\\":0}"   |        | true   |
+    | "{\"\":0,\"\\\"\":0}"   |        | true   |
+    | "{\"a\":true}"          |        | true   |
+    | "{\"a\":true}"          | true   | false  |
+    | "9007199254740991"      | true   | true   |
+    | "9007199254740992"      | true   | false  |
+
+open JC-010 "Values outside JSON"
+  text
+    NaN, the infinities, `undefined` members and other values that a JSON request cannot carry:
+    the library refuses non-finite numbers and leaves out undefined members, but no request can
+    reach either.
+
+open JC-011 "Depth"
+  text
+    How deeply nested a value may be before an implementation gives up, and what it answers then.
+
+open JC-012 "Which part is refused"
+  text
+    When a value has several parts with no canonical form, which one an implementation reports;
+    only the code `no_canonical_form` is pinned.
+
+property JC-P1 "The canonical text reads back as the value and is canonical"
+  supports JC-004, JC-006, JC-009
+  for v in json
+  call a = canonicalize {"value": v}
+  call b = isCanonical {"text": a.result}
+  call c = canonicalize {"value": parse(a.result)}
+  expect parse(a.result) == v
+  expect b.result == true
+  expect c.result == a.result
+
+property JC-P2 "Strict mode refuses or agrees"
+  supports JC-008
+  for v in json
+  call s = canonicalize {"value": v, "strict": true}
+  call n = canonicalize {"value": v}
+  expect has(s, "error") or s.result == n.result
+
+property JC-P3 "Bytes are never fewer than characters"
+  supports JC-007
+  for v in json
+  call t = canonicalize {"value": v}
+  call h = canonicalBytes {"value": v}
+  expect len(h.result) >= 2 * len(t.result)
+
+evidence JC-NUMBERS "RFC 8785 Appendix B number samples"
+  source RFC 8785, Appendix B (https://www.rfc-editor.org/rfc/rfc8785.txt), as copied into x402-solidarity's conformance/jcs-rfc8785.json at d6653c7
+  kind published
+  supports JC-004
+  text
+    The RFC gives each sample as a binary64 bit pattern and its text. A request cannot carry a
+    bit pattern, so each row's input is a decimal that names that same binary64 value: the
+    expected text itself (ECMAScript's text always reads back as the same value), except
+    0x4430000000000000, written as the exact integer 2^68. The two non-finite rows cannot be
+    sent and are left out.
+  table canonicalize
+    | value                     | result                       |
+    | 0                         | "0"                          |
+    | -0                        | "0"                          |
+    | 5e-324                    | "5e-324"                     |
+    | -5e-324                   | "-5e-324"                    |
+    | 1.7976931348623157e308    | "1.7976931348623157e+308"    |
+    | -1.7976931348623157e308   | "-1.7976931348623157e+308"   |
+    | 9007199254740992          | "9007199254740992"           |
+    | -9007199254740992         | "-9007199254740992"          |
+    | 295147905179352825856     | "295147905179352830000"      |
+    | 9.999999999999997e22      | "9.999999999999997e+22"      |
+    | 1e23                      | "1e+23"                      |
+    | 1.0000000000000001e23     | "1.0000000000000001e+23"     |
+    | 999999999999999700000     | "999999999999999700000"      |
+    | 999999999999999900000     | "999999999999999900000"      |
+    | 1e21                      | "1e+21"                      |
+    | 9.999999999999997e-7      | "9.999999999999997e-7"       |
+    | 0.000001                  | "0.000001"                   |
+    | 333333333.3333332         | "333333333.3333332"          |
+    | 333333333.33333325        | "333333333.33333325"         |
+    | 333333333.3333333         | "333333333.3333333"          |
+    | 333333333.3333334         | "333333333.3333334"          |
+    | 333333333.33333343        | "333333333.33333343"         |
+    | -0.0000033333333333333333 | "-0.0000033333333333333333"  |
+    | 1424953923781206.2        | "1424953923781206.2"         |
+
+# ---------------------------------------------------------------------------------------------
+decision D-001 "RFC 8785 is the rule for canonical text"
+  source inferred from jcs.ts's doc comment ("JSON Canonicalization Scheme, RFC 8785") and its callers, which hash and sign the text (ledger.ts statementBytes, policy.ts policyHash)
+  status inferred
+  text
+    The module exists so that a statement or a policy has one byte sequence to hash and sign.
+    Decision: follow RFC 8785 section 3.2 as written (ECMAScript string and number text, UTF-16
+    member order, UTF-8 bytes). Why: other parties check the signatures, and RFC 8785 is the
+    rule they can implement without this code.
+  rejected "Sorting member names by code point or by UTF-8 bytes: RFC 8785 3.2.3 orders by UTF-16 code units, and the two differ for names above U+FFFF."
+
+decision D-002 "Unpaired surrogates are refused, not escaped"
+  source inferred from jcs.ts's doc comment ("Lone surrogates are rejected, because the input must be I-JSON (RFC 7493)")
+  status inferred
+  text
+    ECMAScript's JSON.stringify escapes an unpaired surrogate as `\udXXX`, which yields text, but
+    RFC 8785 takes I-JSON input, which excludes unpaired surrogates. Decision: no canonical form
+    (edge json/rfc8785, not json/sorted-utf16). Why: a value that two parties may encode
+    differently into UTF-8 has no single byte sequence to sign.
+  rejected "Escaping them as json/sorted-utf16 does: the text would exist, but its UTF-8 bytes would not be well-formed for every reader."
+
+decision D-003 "The strict form is the statement form"
+  source inferred from jcs.ts's doc comment ("Statements are limited by the spec to strings, integers below 2^53, arrays, objects and null") and ledger.ts, which reads a statement payload with isCanonical in strict mode
+  status inferred
+  text
+    The ledger signs statements whose numbers are amounts and counts. Decision: strict mode
+    refuses booleans and every number that is not a whole number from 0 to 2^53 − 1, and
+    `isCanonical` in strict mode answers false for such text. Why: amounts and counts are never
+    negative or fractional, and above 2^53 − 1 binary64 no longer holds every integer.
+
+decision D-004 "Negative zero is zero in the strict form"
+  source inferred: jcs.ts says "non-negative integers" and "-0 serializes as 0"; neither says what strict mode does with -0
+  status inferred
+  text
+    A request can carry `-0`. It is an integer and is not negative (it compares equal to 0), and
+    its canonical text is `0`. Decision: strict mode accepts it and writes `0`. Why: refusing it
+    would make the strict form depend on a sign that the canonical text does not show.
+  rejected "Refusing -0 in strict mode: the canonical text, 0, would then be refused for one spelling of the value and accepted for another."
+
+decision D-005 "Bytes travel as lowercase hex"
+  source proposed for this record: the library returns a Uint8Array, which the driver protocol cannot carry
+  status proposed
+  text
+    The driver protocol carries JSON, so `canonicalBytes` answers the bytes as lowercase hex,
+    two digits a byte. Why: the same form as RFC 8785's own samples and the module's tests.
+
+decision D-006 "One error code for every value with no canonical form"
+  source proposed for this record: the library throws an Error whose message varies by cause
+  status proposed
+  text
+    The library throws for an unpaired surrogate, a non-finite number, and (strict) a boolean or
+    a number outside the statement form, with different messages. Decision: the driver answers
+    all of these `no_canonical_form`, and which part is reported is left open (OPEN-JC-012).
+    Why: a caller acts on "this value cannot be signed", not on which part failed first.
