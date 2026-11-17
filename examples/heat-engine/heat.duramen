@@ -482,15 +482,15 @@ req FL-001 "Flag from °F"
 
     | flag | wet-bulb °F | label |
     |---|---|---|
-    | `white` | `w < 80` | `low` |
-    | `green` | `80 ≤ w < 85` | `moderate` |
+    | `white` | `w < 82` | `low` |
+    | `green` | `82 ≤ w < 85` | `moderate` |
     | `yellow` | `85 ≤ w < 88` | `high` |
     | `red` | `88 ≤ w < 90` | `extreme` |
     | `black` | `w ≥ 90` | `critical` |
   table flagF
     | wetBulbF | result.flag | result.flagDartLabel |
-    | 79.99    | "white"     | "low"                |
-    | 80       | "green"     | "moderate"           |
+    | 81.99    | "white"     | "low"                |
+    | 82       | "green"     | "moderate"           |
     | 84.99    | "green"     | "moderate"           |
     | 85       | "yellow"    | "high"               |
     | 88       | "red"       | "extreme"            |
@@ -502,11 +502,11 @@ req FL-002 "Flag audit record"
   text
     The audit: `function` `"flagFromWetBulbF"`; `citation` `"USMC 6200.1E Table 3-1"`;
     `inputs` `{"wetBulbF": wetBulbF}`; `constants`
-    `{"white_max":80,"green_max":85,"yellow_max":88,"red_max":90}`; `result_summary`
+    `{"white_max":82,"green_max":85,"yellow_max":88,"red_max":90}`; `result_summary`
     `wetBulbF=<w> → <flag>` with `<w>` as number text, followed by ` (out_of_observed_range)`
     when `wetBulbF < -50` or `wetBulbF > 200`.
   example flagF {"wetBulbF": 86.5}
-    expect audit.constants = {"white_max": 80, "green_max": 85, "yellow_max": 88, "red_max": 90}
+    expect audit.constants = {"white_max": 82, "green_max": 85, "yellow_max": 88, "red_max": 90}
     expect audit.inputs = {"wetBulbF": 86.5}
   table flagF
     | wetBulbF | audit.result_summary                             |
